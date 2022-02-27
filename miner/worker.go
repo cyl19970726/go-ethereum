@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/tendermint"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -147,6 +148,7 @@ type task struct {
 	state     *state.StateDB
 	block     *types.Block
 	createdAt time.Time
+	resultCh  chan *types.Block
 }
 
 const (
@@ -160,6 +162,7 @@ type newWorkReq struct {
 	interrupt *int32
 	noempty   bool
 	timestamp int64
+	resultCh  chan *types.Block
 }
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
@@ -192,6 +195,7 @@ type worker struct {
 	txsCh        chan core.NewTxsEvent
 	txsSub       event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
+	makeBlockCh  chan chan *types.Block
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
@@ -262,6 +266,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
+		makeBlockCh:        make(chan chan *types.Block),
 		newWorkCh:          make(chan *newWorkReq),
 		getWorkCh:          make(chan *getWorkReq),
 		taskCh:             make(chan *task),
@@ -408,6 +413,17 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 	return time.Duration(int64(next))
 }
 
+func (w *worker) makeBlock(resultCh chan *types.Block) {
+
+	select {
+	case w.makeBlockCh <- resultCh:
+	case <-w.exitCh:
+		return
+	}
+
+	return
+}
+
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.
 func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer w.wg.Done()
@@ -421,14 +437,15 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
+	tm, isTm := w.engine.(*tendermint.Tendermint)
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
-	commit := func(noempty bool, s int32) {
+	commit := func(noempty bool, s int32, resultCh chan *types.Block) {
 		if interrupt != nil {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
 		select {
-		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
+		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp, resultCh: resultCh}:
 		case <-w.exitCh:
 			return
 		}
@@ -448,17 +465,38 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 	for {
 		select {
+		case resultCh := <-w.makeBlockCh:
+			if resultCh == nil {
+				continue
+			}
+
+			commit(true, commitInterruptNewHead, resultCh)
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().NumberU64())
+			if isTm {
+				err := tm.Init(w.chain, w.makeBlock)
+				if err != nil {
+					log.Crit("tm.Init", "err", err)
+				}
+				continue
+			}
+
 			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead)
+			commit(false, commitInterruptNewHead, nil)
 
 		case head := <-w.chainHeadCh:
+
 			clearPending(head.Block.NumberU64())
+			if isTm {
+				continue
+			}
 			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead)
+			commit(false, commitInterruptNewHead, nil)
 
 		case <-timer.C:
+			if isTm {
+				continue
+			}
 			// If sealing is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
@@ -467,10 +505,13 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 					timer.Reset(recommit)
 					continue
 				}
-				commit(true, commitInterruptResubmit)
+				commit(true, commitInterruptResubmit, nil)
 			}
 
 		case interval := <-w.resubmitIntervalCh:
+			if isTm {
+				continue
+			}
 			// Adjust resubmit interval explicitly by user.
 			if interval < minRecommitInterval {
 				log.Warn("Sanitizing miner recommit interval", "provided", interval, "updated", minRecommitInterval)
@@ -484,6 +525,9 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			}
 
 		case adjust := <-w.resubmitAdjustCh:
+			if isTm {
+				continue
+			}
 			// Adjust resubmit interval by feedback.
 			if adjust.inc {
 				before := recommit
@@ -526,7 +570,7 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			w.commitWork(req.interrupt, req.noempty, req.timestamp)
+			w.commitWork(req.interrupt, req.noempty, req.timestamp, req.resultCh)
 
 		case req := <-w.getWorkCh:
 			block, err := w.generateWork(req.params)
@@ -604,7 +648,7 @@ func (w *worker) mainLoop() {
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
 				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(nil, true, time.Now().Unix())
+					w.commitWork(nil, true, time.Now().Unix(), nil)
 				}
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
@@ -660,7 +704,11 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
 
-			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
+			resultCh := w.resultCh
+			if task.resultCh != nil {
+				resultCh = task.resultCh
+			}
+			if err := w.engine.Seal(w.chain, task.block, resultCh, stopCh); err != nil {
 				log.Warn("Block sealing failed", "err", err)
 				w.pendingMu.Lock()
 				delete(w.pendingTasks, sealHash)
