@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
@@ -278,7 +279,7 @@ var (
 
 	// Web3QGalileoChainConfig contains the chain parameters to run a node on the Web3Q test network.
 	Web3QGalileoChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(3333),
+		ChainID:             big.NewInt(3334),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      true,
@@ -293,9 +294,28 @@ var (
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         big.NewInt(0),
 		ArrowGlacierBlock:   nil,
-		Clique: &CliqueConfig{
-			Period: 6,
-			Epoch:  100800, // one week
+		Tendermint: &TendermintConfig{
+			Epoch:              100800, // expect 6s block interval = one week
+			P2pPort:            33333,
+			ProposerRepetition: 8,
+			P2pBootstrap:       "/ip4/127.0.0.1/udp/33333/quic/p2p/12D3KooWRqZRJf6gYeLgeUnNCnKeRb29KiEVQcvRWk2tet9Q3Hmy",
+			NodeKeyPath:        "/Users/qizhou/.ssh/node_galileo.key",
+			ValKeyPath:         "/Users/qizhou/.ssh/val_galileo.key",
+			consensusConfig: ConsensusConfig{
+				// WalPath:                     filepath.Join(defaultDataDir, "cs.wal", "wal"),
+				TimeoutPropose:               3000 * time.Millisecond,
+				TimeoutProposeDelta:          500 * time.Millisecond,
+				TimeoutPrevote:               1000 * time.Millisecond,
+				TimeoutPrevoteDelta:          500 * time.Millisecond,
+				TimeoutPrecommit:             1000 * time.Millisecond,
+				TimeoutPrecommitDelta:        500 * time.Millisecond,
+				TimeoutCommit:                5000 * time.Millisecond,
+				SkipTimeoutCommit:            false,
+				PeerGossipSleepDuration:      100 * time.Millisecond,
+				PeerQueryMaj23SleepDuration:  2000 * time.Millisecond,
+				DoubleSignCheckHeight:        uint64(0),
+				ConsensusSyncRequestDuration: 500 * time.Millisecond,
+			},
 		},
 	}
 
@@ -451,6 +471,7 @@ type TendermintConfig struct {
 	P2pBootstrap       string
 	NodeName           string
 	ProposerRepetition uint64
+	consensusConfig    ConsensusConfig
 }
 
 // String implements the stringer interface, returning the consensus engine details.

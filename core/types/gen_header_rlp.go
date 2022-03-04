@@ -5,6 +5,7 @@
 
 package types
 
+import "github.com/ethereum/go-ethereum/common"
 import "github.com/ethereum/go-ethereum/rlp"
 import "io"
 
@@ -41,7 +42,12 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
 	_tmp1 := obj.BaseFee != nil
-	if _tmp1 {
+	_tmp2 := obj.TimeMs != 0
+	_tmp3 := len(obj.NextValidators) > 0
+	_tmp4 := len(obj.NextValidatorPowers) > 0
+	_tmp5 := obj.LastCommitHash != (common.Hash{})
+	_tmp6 := obj.Commit != nil
+	if _tmp1 || _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
 		} else {
@@ -49,6 +55,47 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 				return rlp.ErrNegativeBigInt
 			}
 			w.WriteBigInt(obj.BaseFee)
+		}
+	}
+	if _tmp2 || _tmp3 || _tmp4 || _tmp5 || _tmp6 {
+		w.WriteUint64(obj.TimeMs)
+	}
+	if _tmp3 || _tmp4 || _tmp5 || _tmp6 {
+		_tmp7 := w.List()
+		for _, _tmp8 := range obj.NextValidators {
+			w.WriteBytes(_tmp8[:])
+		}
+		w.ListEnd(_tmp7)
+	}
+	if _tmp4 || _tmp5 || _tmp6 {
+		_tmp9 := w.List()
+		for _, _tmp10 := range obj.NextValidatorPowers {
+			w.WriteUint64(_tmp10)
+		}
+		w.ListEnd(_tmp9)
+	}
+	if _tmp5 || _tmp6 {
+		w.WriteBytes(obj.LastCommitHash[:])
+	}
+	if _tmp6 {
+		if obj.Commit == nil {
+			w.Write([]byte{0xC0})
+		} else {
+			_tmp11 := w.List()
+			w.WriteUint64(obj.Commit.Height)
+			w.WriteUint64(uint64(obj.Commit.Round))
+			w.WriteBytes(obj.Commit.BlockID[:])
+			_tmp12 := w.List()
+			for _, _tmp13 := range obj.Commit.Signatures {
+				_tmp14 := w.List()
+				w.WriteUint64(uint64(_tmp13.BlockIDFlag))
+				w.WriteBytes(_tmp13.ValidatorAddress[:])
+				w.WriteUint64(_tmp13.TimestampMs)
+				w.WriteBytes(_tmp13.Signature)
+				w.ListEnd(_tmp14)
+			}
+			w.ListEnd(_tmp12)
+			w.ListEnd(_tmp11)
 		}
 	}
 	w.ListEnd(_tmp0)

@@ -165,6 +165,10 @@ var (
 		Name:  "web3q_testnet",
 		Usage: "Web3Q network: pre-configured proof-of-authority test network",
 	}
+	Web3QGalileoFlag = cli.BoolFlag{
+		Name:  "web3q_galileo",
+		Usage: "Web3Q network: pre-configured proof-of-authority BFT test network",
+	}
 	Web3QMainnetFlag = cli.BoolFlag{
 		Name:  "web3q_mainnet",
 		Usage: "Web3Q mainnet",
@@ -822,6 +826,9 @@ func MakeDataDir(ctx *cli.Context) string {
 		if ctx.GlobalBool(Web3QTestnetFlag.Name) {
 			return filepath.Join(path, "web3q_testnet")
 		}
+		if ctx.GlobalBool(Web3QGalileoFlag.Name) {
+			return filepath.Join(path, "web3q_galileo")
+		}
 		if ctx.GlobalBool(Web3QMainnetFlag.Name) {
 			return filepath.Join(path, "web3q_mainnet")
 		}
@@ -881,6 +888,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 		urls = params.GoerliBootnodes
 	case ctx.GlobalBool(Web3QTestnetFlag.Name):
 		urls = params.Web3QTestnetBootnodes
+	case ctx.GlobalBool(Web3QGalileoFlag.Name):
+		urls = params.Web3QGalileoBootnodes
 	case ctx.GlobalBool(Web3QMainnetFlag.Name):
 		urls = params.Web3QMainnetBootnodes
 	case cfg.BootstrapNodes != nil:
@@ -1306,6 +1315,8 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "sepolia")
 	case ctx.GlobalBool(Web3QTestnetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "web3q_testnet")
+	case ctx.GlobalBool(Web3QGalileoFlag.Name) && cfg.DataDir == node.DefaultDataDir():
+		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "web3q_galileo")
 	case ctx.GlobalBool(Web3QMainnetFlag.Name) && cfg.DataDir == node.DefaultDataDir():
 		cfg.DataDir = filepath.Join(node.DefaultDataDir(), "web3q_mainnet")
 	}
@@ -1493,7 +1504,7 @@ func CheckExclusive(ctx *cli.Context, args ...interface{}) {
 // SetEthConfig applies eth-related command line flags to the config.
 func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	// Avoid conflicting network flags
-	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, SepoliaFlag, Web3QTestnetFlag, Web3QMainnetFlag)
+	CheckExclusive(ctx, MainnetFlag, DeveloperFlag, RopstenFlag, RinkebyFlag, GoerliFlag, SepoliaFlag, Web3QTestnetFlag, Web3QGalileoFlag, Web3QMainnetFlag)
 	CheckExclusive(ctx, LightServeFlag, SyncModeFlag, "light")
 	CheckExclusive(ctx, DeveloperFlag, ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
 	if ctx.GlobalString(GCModeFlag.Name) == "archive" && ctx.GlobalUint64(TxLookupLimitFlag.Name) != 0 {
@@ -1660,6 +1671,12 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 			cfg.NetworkId = 3333
 		}
 		cfg.Genesis = core.DefaultWeb3QTestnetGenesisBlock()
+		SetDNSDiscoveryDefaults(cfg, cfg.Genesis.ToBlock(nil).Hash())
+	case ctx.GlobalBool(Web3QGalileoFlag.Name):
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkId = 3334
+		}
+		cfg.Genesis = core.DefaultWeb3QGalileoGenesisBlock()
 		SetDNSDiscoveryDefaults(cfg, cfg.Genesis.ToBlock(nil).Hash())
 	case ctx.GlobalBool(Web3QMainnetFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
