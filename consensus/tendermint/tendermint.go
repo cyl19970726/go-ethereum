@@ -111,7 +111,7 @@ func (c *Tendermint) SetBlockChain(chain *core.BlockChain) {
 	c.chain = chain
 }
 
-func (c *Tendermint) Init(makeBlock func(chan *types.Block)) (err error) {
+func (c *Tendermint) Init(makeBlock func(parent common.Hash, timestamp uint64) (*types.Block, error)) (err error) {
 	chain := c.chain
 	// Outbound gossip message queue
 	sendC := make(chan pbftconsensus.Message, 1000)
@@ -124,22 +124,22 @@ func (c *Tendermint) Init(makeBlock func(chan *types.Block)) (err error) {
 	c.rootCtxCancel = rootCtxCancel
 	c.rootCtx = rootCtx
 
-	makeFullBlock := func() *types.FullBlock {
-		resultCh := make(chan *types.Block, 1)
-		makeBlock(resultCh)
-		select {
-		case block := <-resultCh:
-			if block == nil {
-				return nil
-			}
-			parent := chain.GetHeaderByHash(block.ParentHash())
-			if parent == nil {
-				return nil
-			}
-			return &types.FullBlock{Block: block, LastCommit: parent.Commit}
-		case <-rootCtx.Done():
+	makeFullBlock := func(parentHash common.Hash, timestamp uint64) *types.FullBlock {
+
+		block, err := makeBlock(parentHash, timestamp)
+		if err != nil {
+			log.Warn("makeBlock", "err", err)
 			return nil
 		}
+		if block == nil {
+			log.Warn("makeBlock returns nil block")
+			return nil
+		}
+		parentHeader := chain.GetHeaderByHash(block.ParentHash())
+		if parentHeader == nil {
+			return nil
+		}
+		return &types.FullBlock{Block: block, LastCommit: parentHeader.Commit}
 	}
 	// datastore
 	store := adapter.NewStore(chain, c.governance, c.VerifyHeader, makeFullBlock)
