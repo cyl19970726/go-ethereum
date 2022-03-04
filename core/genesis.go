@@ -439,6 +439,21 @@ func DefaultWeb3QTestnetGenesisBlock() *Genesis {
 	}
 }
 
+// DefaultWeb3QGalileoGenesisBlock returns the Web3Q test network genesis block.
+func DefaultWeb3QGalileoGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.Web3QTestnetChainConfig,
+		Nonce:      0,
+		ExtraData:  hexutil.MustDecode("0x57656c636f6d6520746f20746865206272617665206e657720776f726c6421"),
+		GasLimit:   30000000,
+		Difficulty: big.NewInt(0x1),
+		Timestamp:  1644537097,
+		Alloc: map[common.Address]GenesisAccount{
+			common.HexToAddress("0x0E961a6A6235eFDB9a0F0BC753E395211B77cc28"): {Balance: new(big.Int).Mul(big.NewInt(1000000000000000000), big.NewInt(1000000000))}, // 1e9 Ether
+		},
+	}
+}
+
 // DefaultWeb3QMainnetGenesisBlock returns the Web3Q main network genesis block.
 func DefaultWeb3QMainnetGenesisBlock() *Genesis {
 	return &Genesis{

@@ -1137,7 +1137,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 
 // commitWork generates several new sealing tasks based on the parent block
 // and submit them to the sealer.
-func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
+func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64, resultCh chan *types.Block) {
 	start := time.Now()
 
 	// Set the coinbase if the worker is running or it's required
