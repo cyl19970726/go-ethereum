@@ -36,3 +36,19 @@ func (g *Governance) NextValidators(height uint64) []common.Address {
 		return header.NextValidators
 	}
 }
+
+func (g *Governance) NextValidatorPowers(height uint64) []uint64 {
+	if height%g.epoch != 0 {
+		return nil
+	}
+
+	switch {
+	case height == 0:
+		header := g.chain.GetHeaderByNumber(0)
+		return header.NextValidatorPowers
+	default:
+		// TODO get real validators by calling contract
+		header := g.chain.GetHeaderByNumber(height - g.epoch)
+		return header.NextValidatorPowers
+	}
+}

@@ -409,9 +409,9 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 	return time.Duration(int64(next))
 }
 
-func (w *worker) makeBlock(parent common.Hash, timestamp uint64) (*types.Block, error) {
+func (w *worker) makeBlock(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
 
-	return w.getSealingBlock(parent, timestamp, w.coinbase, common.Hash{})
+	return w.getSealingBlock(parent, timestamp, coinbase, common.Hash{})
 }
 
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.

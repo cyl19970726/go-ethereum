@@ -2306,6 +2306,8 @@ func (bc *BlockChain) PreExecuteBlock(block *types.Block) (err error) {
 		return
 	}
 
+	statedb.StartPrefetcher("pre_execute")
+
 	txHash := types.DeriveSha(block.Transactions(), trie.NewStackTrie(nil))
 	if block.TxHash() != txHash {
 		err = fmt.Errorf("txHash mismatch, got %s, expect %s", block.TxHash(), txHash)
