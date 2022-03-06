@@ -148,7 +148,6 @@ type task struct {
 	state     *state.StateDB
 	block     *types.Block
 	createdAt time.Time
-	resultCh  chan *types.Block
 }
 
 const (
@@ -162,7 +161,6 @@ type newWorkReq struct {
 	interrupt *int32
 	noempty   bool
 	timestamp int64
-	resultCh  chan *types.Block
 }
 
 // getWorkReq represents a request for getting a new sealing work with provided parameters.
@@ -195,7 +193,6 @@ type worker struct {
 	txsCh        chan core.NewTxsEvent
 	txsSub       event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
-	makeBlockCh  chan chan *types.Block
 	chainHeadSub event.Subscription
 	chainSideCh  chan core.ChainSideEvent
 	chainSideSub event.Subscription
@@ -266,7 +263,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 		txsCh:              make(chan core.NewTxsEvent, txChanSize),
 		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
 		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
-		makeBlockCh:        make(chan chan *types.Block),
 		newWorkCh:          make(chan *newWorkReq),
 		getWorkCh:          make(chan *getWorkReq),
 		taskCh:             make(chan *task),
@@ -413,15 +409,9 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 	return time.Duration(int64(next))
 }
 
-func (w *worker) makeBlock(resultCh chan *types.Block) {
+func (w *worker) makeBlock(parent common.Hash, timestamp uint64) (*types.Block, error) {
 
-	select {
-	case w.makeBlockCh <- resultCh:
-	case <-w.exitCh:
-		return
-	}
-
-	return
+	return w.getSealingBlock(parent, timestamp, w.coinbase, common.Hash{})
 }
 
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.
@@ -439,13 +429,13 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 	tm, isTm := w.engine.(*tendermint.Tendermint)
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
-	commit := func(noempty bool, s int32, resultCh chan *types.Block) {
+	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
 			atomic.StoreInt32(interrupt, s)
 		}
 		interrupt = new(int32)
 		select {
-		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp, resultCh: resultCh}:
+		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
 		case <-w.exitCh:
 			return
 		}
@@ -465,12 +455,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 
 	for {
 		select {
-		case resultCh := <-w.makeBlockCh:
-			if resultCh == nil {
-				continue
-			}
-
-			commit(true, commitInterruptNewHead, resultCh)
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().NumberU64())
 			if isTm {
@@ -482,7 +466,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			}
 
 			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead, nil)
+			commit(false, commitInterruptNewHead)
 
 		case head := <-w.chainHeadCh:
 
@@ -491,7 +475,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 				continue
 			}
 			timestamp = time.Now().Unix()
-			commit(false, commitInterruptNewHead, nil)
+			commit(false, commitInterruptNewHead)
 
 		case <-timer.C:
 			if isTm {
@@ -505,7 +489,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 					timer.Reset(recommit)
 					continue
 				}
-				commit(true, commitInterruptResubmit, nil)
+				commit(true, commitInterruptResubmit)
 			}
 
 		case interval := <-w.resubmitIntervalCh:
@@ -570,7 +554,7 @@ func (w *worker) mainLoop() {
 	for {
 		select {
 		case req := <-w.newWorkCh:
-			w.commitWork(req.interrupt, req.noempty, req.timestamp, req.resultCh)
+			w.commitWork(req.interrupt, req.noempty, req.timestamp)
 
 		case req := <-w.getWorkCh:
 			block, err := w.generateWork(req.params)
@@ -648,7 +632,7 @@ func (w *worker) mainLoop() {
 				// submit sealing work here since all empty submission will be rejected
 				// by clique. Of course the advance sealing(empty submission) is disabled.
 				if w.chainConfig.Clique != nil && w.chainConfig.Clique.Period == 0 {
-					w.commitWork(nil, true, time.Now().Unix(), nil)
+					w.commitWork(nil, true, time.Now().Unix())
 				}
 			}
 			atomic.AddInt32(&w.newTxs, int32(len(ev.Txs)))
@@ -704,11 +688,7 @@ func (w *worker) taskLoop() {
 			w.pendingTasks[sealHash] = task
 			w.pendingMu.Unlock()
 
-			resultCh := w.resultCh
-			if task.resultCh != nil {
-				resultCh = task.resultCh
-			}
-			if err := w.engine.Seal(w.chain, task.block, resultCh, stopCh); err != nil {
+			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
 				log.Warn("Block sealing failed", "err", err)
 				w.pendingMu.Lock()
 				delete(w.pendingTasks, sealHash)
@@ -1137,7 +1117,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 
 // commitWork generates several new sealing tasks based on the parent block
 // and submit them to the sealer.
-func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64, resultCh chan *types.Block) {
+func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	start := time.Now()
 
 	// Set the coinbase if the worker is running or it's required
