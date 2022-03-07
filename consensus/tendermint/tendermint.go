@@ -300,7 +300,7 @@ func (c *Tendermint) verifyHeader(chain consensus.ChainHeaderReader, header *typ
 	}
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
 	if number > 0 {
-		if header.Difficulty == nil || (header.Difficulty.Cmp(big.NewInt(int64(number))) != 0) {
+		if header.Difficulty == nil || (header.Difficulty.Cmp(big.NewInt(1)) != 0) {
 			return errInvalidDifficulty
 		}
 	}
@@ -374,7 +374,7 @@ func (c *Tendermint) Prepare(chain consensus.ChainHeaderReader, header *types.He
 
 	header.TimeMs = timestamp
 	header.Time = timestamp / 1000
-	header.Difficulty = big.NewInt(int64(number))
+	header.Difficulty = big.NewInt(1)
 
 	if (number % c.config.Epoch) != 0 {
 		header.NextValidators = []common.Address{}
