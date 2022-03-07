@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
-	"reflect"
 	"time"
 
 	pbftconsensus "github.com/QuarkChain/go-minimal-pbft/consensus"
@@ -111,7 +110,7 @@ func (c *Tendermint) SetBlockChain(chain *core.BlockChain) {
 	c.chain = chain
 }
 
-func (c *Tendermint) Init(makeBlock func(parent common.Hash, timestamp uint64) (*types.Block, error)) (err error) {
+func (c *Tendermint) Init(makeBlock func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error)) (err error) {
 	chain := c.chain
 	// Outbound gossip message queue
 	sendC := make(chan pbftconsensus.Message, 1000)
@@ -124,9 +123,9 @@ func (c *Tendermint) Init(makeBlock func(parent common.Hash, timestamp uint64) (
 	c.rootCtxCancel = rootCtxCancel
 	c.rootCtx = rootCtx
 
-	makeFullBlock := func(parentHash common.Hash, timestamp uint64) *types.FullBlock {
-
-		block, err := makeBlock(parentHash, timestamp)
+	makeFullBlock := func(parentHash common.Hash, coinbase common.Address, timestamp uint64) *types.FullBlock {
+		log.Info("Making a block", "parent", parentHash)
+		block, err := makeBlock(parentHash, coinbase, timestamp)
 		if err != nil {
 			log.Warn("makeBlock", "err", err)
 			return nil
@@ -181,11 +180,12 @@ func (c *Tendermint) Init(makeBlock func(parent common.Hash, timestamp uint64) (
 		c.config.Epoch,
 		int64(c.config.ProposerRepetition),
 	)
+	gcs.LastBlockID = genesis.Hash()
 
 	// consensus
 	consensusState := pbftconsensus.NewConsensusState(
 		rootCtx,
-		pbftconsensus.NewDefaultConsesusConfig(),
+		&c.config.ConsensusConfig,
 		*gcs,
 		store,
 		store,
@@ -280,15 +280,12 @@ func (c *Tendermint) verifyHeader(chain consensus.ChainHeaderReader, header *typ
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
-	// Checkpoint blocks need to enforce zero beneficiary
-	checkpoint := (number % c.config.Epoch) == 0
-	if checkpoint && header.Coinbase != (common.Address{}) {
-		return errInvalidCheckpointBeneficiary
-	}
 
-	nextValidators := c.governance.NextValidators(number)
-	if !reflect.DeepEqual(nextValidators, header.NextValidators) {
-		return errors.New("invalid NextValidators")
+	if number%c.config.Epoch != 0 && len(header.NextValidators) != 0 {
+		return errors.New("NextValidators must be empty for non-epoch block")
+	}
+	if len(header.NextValidatorPowers) != len(header.NextValidators) {
+		return errors.New("NextValidators must have the same len as powers")
 	}
 	if !bytes.Equal(header.Nonce[:], nonceDefault) {
 		return errors.New("invalid nonce")
@@ -303,7 +300,7 @@ func (c *Tendermint) verifyHeader(chain consensus.ChainHeaderReader, header *typ
 	}
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
 	if number > 0 {
-		if header.Difficulty == nil || (header.Difficulty.Cmp(big.NewInt(0)) != 0) {
+		if header.Difficulty == nil || (header.Difficulty.Cmp(big.NewInt(1)) != 0) {
 			return errInvalidDifficulty
 		}
 	}
@@ -377,8 +374,15 @@ func (c *Tendermint) Prepare(chain consensus.ChainHeaderReader, header *types.He
 
 	header.TimeMs = timestamp
 	header.Time = timestamp / 1000
+	header.Difficulty = big.NewInt(1)
 
-	header.NextValidators = c.governance.NextValidators(number)
+	if (number % c.config.Epoch) != 0 {
+		header.NextValidators = []common.Address{}
+		header.NextValidatorPowers = []uint64{}
+	} else {
+		header.NextValidators = c.governance.NextValidators(number)
+	}
+
 	return nil
 }
 

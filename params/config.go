@@ -301,7 +301,7 @@ var (
 			P2pBootstrap:       "/ip4/127.0.0.1/udp/33333/quic/p2p/12D3KooWRqZRJf6gYeLgeUnNCnKeRb29KiEVQcvRWk2tet9Q3Hmy",
 			NodeKeyPath:        "/Users/qizhou/.ssh/node_galileo.key",
 			ValKeyPath:         "/Users/qizhou/.ssh/val_galileo.key",
-			consensusConfig: ConsensusConfig{
+			ConsensusConfig: ConsensusConfig{
 				// WalPath:                     filepath.Join(defaultDataDir, "cs.wal", "wal"),
 				TimeoutPropose:               3000 * time.Millisecond,
 				TimeoutProposeDelta:          500 * time.Millisecond,
@@ -471,7 +471,7 @@ type TendermintConfig struct {
 	P2pBootstrap       string
 	NodeName           string
 	ProposerRepetition uint64
-	consensusConfig    ConsensusConfig
+	ConsensusConfig    ConsensusConfig
 }
 
 // String implements the stringer interface, returning the consensus engine details.

@@ -17,14 +17,14 @@ type Store struct {
 	chain            *core.BlockChain
 	governance       *gov.Governance
 	verifyHeaderFunc func(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error
-	makeBlock        func(parentHash common.Hash, timestamp uint64) (block *types.FullBlock)
+	makeBlock        func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.FullBlock)
 }
 
 func NewStore(
 	chain *core.BlockChain,
 	governance *gov.Governance,
 	verifyHeaderFunc func(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error,
-	makeBlock func(parentHash common.Hash, timestamp uint64) (block *types.FullBlock)) *Store {
+	makeBlock func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.FullBlock)) *Store {
 	return &Store{chain: chain, governance: governance, verifyHeaderFunc: verifyHeaderFunc, makeBlock: makeBlock}
 }
 
@@ -161,6 +161,17 @@ func updateState(
 	}, nil
 }
 
-func (s *Store) MakeBlock(parentHash common.Hash, timestamp uint64) *types.FullBlock {
-	return s.makeBlock(parentHash, timestamp)
+func (s *Store) MakeBlock(state *pbft.ChainState, height uint64,
+	commit *pbft.Commit,
+	proposerAddress common.Address) *types.FullBlock {
+
+	// Set time.
+	var timestamp uint64
+	if height == state.InitialHeight {
+		timestamp = state.LastBlockTime + 1 // genesis time + 1
+	} else {
+		timestamp = pbft.MedianTime(commit, state.LastValidators)
+	}
+
+	return s.makeBlock(state.LastBlockID, proposerAddress, timestamp)
 }
