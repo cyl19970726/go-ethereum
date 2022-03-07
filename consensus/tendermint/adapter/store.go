@@ -7,7 +7,6 @@ import (
 	pbft "github.com/QuarkChain/go-minimal-pbft/consensus"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/tendermint/gov"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -15,17 +14,15 @@ import (
 
 type Store struct {
 	chain            *core.BlockChain
-	governance       *gov.Governance
 	verifyHeaderFunc func(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error
 	makeBlock        func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.FullBlock)
 }
 
 func NewStore(
 	chain *core.BlockChain,
-	governance *gov.Governance,
 	verifyHeaderFunc func(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error,
 	makeBlock func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.FullBlock)) *Store {
-	return &Store{chain: chain, governance: governance, verifyHeaderFunc: verifyHeaderFunc, makeBlock: makeBlock}
+	return &Store{chain: chain, verifyHeaderFunc: verifyHeaderFunc, makeBlock: makeBlock}
 }
 
 func (s *Store) Base() uint64 {
