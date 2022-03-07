@@ -291,6 +291,9 @@ func prepare(ctx *cli.Context) {
 	case ctx.GlobalIsSet(utils.Web3QTestnetFlag.Name):
 		log.Info("Starting Geth in Web3Q dev mode...")
 
+	case ctx.GlobalIsSet(utils.Web3QGalileoFlag.Name):
+		log.Info("Starting Geth in Web3Q Galileo testnet...")
+
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
 		log.Info("Starting Geth on Ethereum mainnet...")
 	}

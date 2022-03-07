@@ -300,7 +300,6 @@ var (
 			ProposerRepetition: 8,
 			P2pBootstrap:       "/ip4/127.0.0.1/udp/33333/quic/p2p/12D3KooWRqZRJf6gYeLgeUnNCnKeRb29KiEVQcvRWk2tet9Q3Hmy",
 			NodeKeyPath:        "/Users/qizhou/.ssh/node_galileo.key",
-			ValKeyPath:         "/Users/qizhou/.ssh/val_galileo.key",
 			ConsensusConfig: ConsensusConfig{
 				// WalPath:                     filepath.Join(defaultDataDir, "cs.wal", "wal"),
 				TimeoutPropose:               3000 * time.Millisecond,
@@ -464,7 +463,6 @@ type CliqueConfig struct {
 
 type TendermintConfig struct {
 	Epoch              uint64 `json:"epoch"` // Epoch lengh to vote new validator
-	ValKeyPath         string
 	NodeKeyPath        string
 	P2pPort            uint
 	NetworkID          string
