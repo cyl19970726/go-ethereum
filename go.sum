@@ -87,6 +87,8 @@ github.com/QuarkChain/go-minimal-pbft v0.0.0-20220303075012-6084b729db36 h1:2SJS
 github.com/QuarkChain/go-minimal-pbft v0.0.0-20220303075012-6084b729db36/go.mod h1:nC/gDMz8G2h+K5KGDiEwEGJ//D70G8mwOBgHraRUab8=
 github.com/QuarkChain/go-minimal-pbft v0.0.0-20220306083522-1c8dc76afb94 h1:T2Ogn+k7G/0hybvozBlps68CWpfvczJ5MT+wgwqKJgQ=
 github.com/QuarkChain/go-minimal-pbft v0.0.0-20220306083522-1c8dc76afb94/go.mod h1:nC/gDMz8G2h+K5KGDiEwEGJ//D70G8mwOBgHraRUab8=
+github.com/QuarkChain/go-minimal-pbft v0.0.0-20220307211413-49a75ab4c3f2 h1:ChaJ8RHQxVn9aSm5ttGz15GEFKzwrhC52GKZnT1U7Ec=
+github.com/QuarkChain/go-minimal-pbft v0.0.0-20220307211413-49a75ab4c3f2/go.mod h1:nC/gDMz8G2h+K5KGDiEwEGJ//D70G8mwOBgHraRUab8=
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
 github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6/go.mod h1:3eOhrUMpNV+6aFIbp5/iudMxNCF27Vw2OZgy4xEx0Fg=
