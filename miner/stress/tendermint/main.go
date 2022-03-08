@@ -18,7 +18,9 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -42,6 +44,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/libp2p/go-libp2p-core/peer"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 func main() {
@@ -85,7 +89,6 @@ func main() {
 		for _, n := range enodes {
 			stack.Server().AddPeer(n)
 		}
-		// TODO connect libp2p
 
 		// Start tracking the node and its enode
 		stacks = append(stacks, stack)
@@ -106,10 +109,43 @@ func main() {
 
 	// Iterate over all the nodes and start signing on them
 	time.Sleep(3 * time.Second)
+
+	var maddrs []ma.Multiaddr
 	for _, node := range nodes {
 		if err := node.StartMining(1); err != nil {
 			panic(err)
 		}
+
+		// Connect libp2p
+		tm := node.Engine().(*tendermint.Tendermint)
+		for len(tm.P2pServer().Host.Network().ListenAddresses()) == 0 {
+			time.Sleep(250 * time.Millisecond)
+		}
+		for _, maddr := range maddrs {
+
+			pi, err := peer.AddrInfoFromP2pAddr(maddr)
+			if err != nil {
+				log.Warn("AddrInfoFromP2pAddr failed", "err", err, "ma", maddr)
+				continue
+			}
+			err = tm.P2pServer().Host.Connect(context.Background(), *pi)
+			if err != nil {
+				log.Warn("Host.Connect failed", "err", err)
+			} else {
+				log.Info("Host.Connect success")
+			}
+		}
+		listenAddr, err := tm.P2pServer().Host.Network().InterfaceListenAddresses()
+		if err != nil {
+			panic(fmt.Sprintf("InterfaceListenAddresses failed:%v", err))
+		}
+
+		addr, err := ma.NewMultiaddr(fmt.Sprintf("/p2p/%s", tm.P2pServer().Host.ID()))
+		var p2pAddr []ma.Multiaddr
+		for _, ma := range listenAddr {
+			p2pAddr = append(p2pAddr, ma.Encapsulate(addr))
+		}
+		maddrs = append(maddrs, p2pAddr...)
 	}
 	time.Sleep(3 * time.Second)
 
@@ -153,6 +189,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	// Create a Clique network based off of the Rinkeby config
 	genesis := core.DefaultWeb3QGalileoGenesisBlock()
 	genesis.GasLimit = 25000000
+	genesis.Config.Tendermint.P2pPort = 0
 
 	genesis.Alloc = core.GenesisAlloc{}
 	for _, faucet := range faucets {

@@ -90,6 +90,8 @@ type Tendermint struct {
 
 	lock    sync.RWMutex // Protects the signer fields
 	privVal pbftconsensus.PrivValidator
+
+	p2pserver *libp2p.Server
 }
 
 // New creates a Clique proof-of-authority consensus engine with the initial
@@ -125,6 +127,10 @@ func (c *Tendermint) getPrivValidator() pbftconsensus.PrivValidator {
 	return c.privVal
 }
 
+func (c *Tendermint) P2pServer() *libp2p.Server {
+	return c.p2pserver
+}
+
 func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error)) (err error) {
 	// Outbound gossip message queue
 	sendC := make(chan pbftconsensus.Message, 1000)
@@ -138,10 +144,10 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 	c.rootCtx = rootCtx
 
 	makeFullBlock := func(parentHash common.Hash, coinbase common.Address, timestamp uint64) *types.FullBlock {
-		log.Info("Making a block", "parent", parentHash)
+
 		block, err := makeBlock(parentHash, coinbase, timestamp)
 		if err != nil {
-			log.Warn("makeBlock", "err", err)
+			log.Warn("makeBlock", "err", err, "parent", parentHash)
 			return nil
 		}
 		if block == nil {
@@ -152,6 +158,7 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 		if parentHeader == nil {
 			return nil
 		}
+		log.Info("Making a block", "parent", parentHash, "number", block.Number(), "hash", block.Hash())
 		return &types.FullBlock{Block: block, LastCommit: parentHeader.Commit}
 	}
 	// datastore
@@ -168,6 +175,8 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 	if err != nil {
 		return
 	}
+
+	c.p2pserver = p2pserver
 
 	go func() {
 		err := p2pserver.Run(rootCtx)
