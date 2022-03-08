@@ -427,7 +427,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
-	tm, isTm := w.engine.(*tendermint.Tendermint)
+	_, isTm := w.engine.(*tendermint.Tendermint)
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
@@ -457,11 +457,8 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		select {
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().NumberU64())
+
 			if isTm {
-				err := tm.Init(w.chain, w.makeBlock)
-				if err != nil {
-					log.Crit("tm.Init", "err", err)
-				}
 				continue
 			}
 

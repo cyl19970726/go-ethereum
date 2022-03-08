@@ -82,7 +82,9 @@ var Web3QTestnetBootnodes = []string{
 }
 
 // TODO: to update
-var Web3QGalileoBootnodes = []string{}
+var Web3QGalileoBootnodes = []string{
+	"enode://1b9032f19ae39390e84718071ac8d560f5a11e1b8e02de4a40654a9d2950ae77b34a2ca90854413dfe5973c0040d0928a5cf27a46cd8cc1c6a8fbc1fb7d2825f@127.0.0.1:30303",
+}
 
 var Web3QMainnetBootnodes = []string{
 	"enode://0c2e9b39c4f8655d6cdd3dd3a57bee4fb1c20a3c844507b36bd806d7219048e3df6b7bc3dcc0a1830b59c7d25f983572c11a8ab8469e21a8d937f4ba84d98288@143.244.163.228:30303",

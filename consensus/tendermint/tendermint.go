@@ -25,10 +25,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"sync"
 	"time"
 
 	pbftconsensus "github.com/QuarkChain/go-minimal-pbft/consensus"
 	libp2p "github.com/QuarkChain/go-minimal-pbft/p2p"
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -85,6 +87,9 @@ type Tendermint struct {
 	config        *params.TendermintConfig // Consensus engine configuration parameters
 	rootCtxCancel context.CancelFunc
 	rootCtx       context.Context
+
+	lock    sync.RWMutex // Protects the signer fields
+	privVal pbftconsensus.PrivValidator
 }
 
 // New creates a Clique proof-of-authority consensus engine with the initial
@@ -99,6 +104,25 @@ func New(config *params.TendermintConfig) *Tendermint {
 	return &Tendermint{
 		config: &conf,
 	}
+}
+
+// SignerFn hashes and signs the data to be signed by a backing account.
+type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
+
+// Authorize injects a private key into the consensus engine to mint new blocks
+// with.
+func (c *Tendermint) Authorize(signer common.Address, signFn SignerFn) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.privVal = NewEthPrivValidator(signer, signFn)
+}
+
+func (c *Tendermint) getPrivValidator() pbftconsensus.PrivValidator {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	return c.privVal
 }
 
 func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error)) (err error) {
@@ -132,15 +156,6 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 	}
 	// datastore
 	store := adapter.NewStore(chain, c.VerifyHeader, makeFullBlock)
-
-	// validator key
-	valKey, err := loadValidatorKey(c.config.ValKeyPath)
-	if err != nil {
-		return
-	}
-
-	var privVal pbftconsensus.PrivValidator
-	privVal = pbftconsensus.NewPrivValidatorLocal(valKey)
 
 	// p2p key
 	p2pPriv, err := loadP2pKey(c.config.NodeKeyPath)
@@ -196,7 +211,15 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 		sendC,
 	)
 
-	consensusState.SetPrivValidator(privVal)
+	privVal := c.getPrivValidator()
+	if privVal != nil {
+		consensusState.SetPrivValidator(privVal)
+		pubkey, err := privVal.GetPubKey(rootCtx)
+		if err != nil {
+			panic("fail to get validator address")
+		}
+		log.Info("Chamber consensus in validator mode", "validator_addr", pubkey.Address())
+	}
 
 	err = consensusState.Start(rootCtx)
 	if err != nil {
@@ -420,7 +443,7 @@ func (c *Tendermint) Seal(chain consensus.ChainHeaderReader, block *types.Block,
 // * DIFF_INTURN(1) if BLOCK_NUMBER % SIGNER_COUNT == SIGNER_INDEX
 func (c *Tendermint) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
 	// TOOD: no diff is required
-	return big.NewInt(0)
+	return big.NewInt(1)
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
@@ -440,5 +463,5 @@ func (c *Tendermint) Close() error {
 // APIs implements consensus.Engine, returning the user facing RPC API to allow
 // controlling the signer voting.
 func (c *Tendermint) APIs(chain consensus.ChainHeaderReader) []rpc.API {
-	return []rpc.API{{}}
+	return []rpc.API{}
 }

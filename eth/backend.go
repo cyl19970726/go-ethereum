@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/tendermint"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -473,14 +474,31 @@ func (s *Ethereum) StartMining(threads int) error {
 				cli = c
 			}
 		}
-		if cli != nil {
+		var tm *tendermint.Tendermint
+		if c, ok := s.engine.(*tendermint.Tendermint); ok {
+			tm = c
+		}
+		if cli != nil || tm != nil {
 			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
 			if wallet == nil || err != nil {
 				log.Error("Etherbase account unavailable locally", "err", err)
 				return fmt.Errorf("signer missing: %v", err)
 			}
-			cli.Authorize(eb, wallet.SignData)
+			if cli != nil {
+				cli.Authorize(eb, wallet.SignData)
+			}
+			if tm != nil {
+				tm.Authorize(eb, wallet.SignData)
+
+				err := tm.Init(s.blockchain, func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
+					return s.miner.GetSealingBlock(parent, timestamp, coinbase, common.Hash{})
+				})
+				if err != nil {
+					log.Crit("tm.Init", "err", err)
+				}
+			}
 		}
+
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
 		atomic.StoreUint32(&s.handler.acceptTxs, 1)
