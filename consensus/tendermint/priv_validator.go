@@ -2,7 +2,6 @@ package tendermint
 
 import (
 	"context"
-	"sync"
 
 	pbft "github.com/QuarkChain/go-minimal-pbft/consensus"
 	"github.com/ethereum/go-ethereum/accounts"
@@ -13,7 +12,6 @@ import (
 type EthPrivValidator struct {
 	signer common.Address // Ethereum address of the signing key
 	signFn SignerFn       // Signer function to authorize hashes with
-	lock   sync.RWMutex   // Protects the signer fields
 }
 
 type EthPubKey struct {
@@ -56,9 +54,6 @@ func (pv *EthPrivValidator) GetPubKey(context.Context) (pbft.PubKey, error) {
 }
 
 func (pv *EthPrivValidator) SignVote(ctx context.Context, chainId string, vote *pbft.Vote) error {
-	pv.lock.Lock()
-	defer pv.lock.Unlock()
-
 	vote.TimestampMs = uint64(pbft.CanonicalNowMs())
 	b := vote.VoteSignBytes(chainId)
 
@@ -69,8 +64,6 @@ func (pv *EthPrivValidator) SignVote(ctx context.Context, chainId string, vote *
 }
 
 func (pv *EthPrivValidator) SignProposal(ctx context.Context, chainID string, proposal *pbft.Proposal) error {
-	pv.lock.Lock()
-	defer pv.lock.Unlock()
 	// TODO: sanity check
 	b := proposal.ProposalSignBytes(chainID)
 
