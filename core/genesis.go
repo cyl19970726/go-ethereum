@@ -451,8 +451,13 @@ func DefaultWeb3QGalileoGenesisBlock() *Genesis {
 		Alloc: map[common.Address]GenesisAccount{
 			common.HexToAddress("0x0E961a6A6235eFDB9a0F0BC753E395211B77cc28"): {Balance: new(big.Int).Mul(big.NewInt(1000000000000000000), big.NewInt(1000000000))}, // 1e9 Ether
 		},
-		NextValidators:      []common.Address{common.HexToAddress("0xC7B6Ad1038b5a79c12B066d6E3e8972f3EceaDe7")},
-		NextValidatorPowers: []uint64{1},
+		NextValidators: []common.Address{
+			common.HexToAddress("0xC7B6Ad1038b5a79c12B066d6E3e8972f3EceaDe7"),
+			common.HexToAddress("0x90a7bff0b4b11f365367d4c9fe084223c850b229"),
+			common.HexToAddress("0x9b29ad441b195b641aa0a45ad4085c51da62fe54"),
+			common.HexToAddress("0x1b47a4d3266213354d59ecaf338a4698177819d1"),
+		},
+		NextValidatorPowers: []uint64{1, 1, 1, 1},
 	}
 }
 

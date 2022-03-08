@@ -15,13 +15,13 @@ import (
 type Store struct {
 	chain            *core.BlockChain
 	verifyHeaderFunc func(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error
-	makeBlock        func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.FullBlock)
+	makeBlock        func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.Block, err error)
 }
 
 func NewStore(
 	chain *core.BlockChain,
 	verifyHeaderFunc func(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error,
-	makeBlock func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.FullBlock)) *Store {
+	makeBlock func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.Block, err error)) *Store {
 	return &Store{chain: chain, verifyHeaderFunc: verifyHeaderFunc, makeBlock: makeBlock}
 }
 
@@ -170,5 +170,10 @@ func (s *Store) MakeBlock(state *pbft.ChainState, height uint64,
 		timestamp = pbft.MedianTime(commit, state.LastValidators)
 	}
 
-	return s.makeBlock(state.LastBlockID, proposerAddress, timestamp)
+	block, err := s.makeBlock(state.LastBlockID, proposerAddress, timestamp)
+	if err != nil {
+		panic("failed to make a block")
+	}
+
+	return &types.FullBlock{Block: block, LastCommit: commit}
 }

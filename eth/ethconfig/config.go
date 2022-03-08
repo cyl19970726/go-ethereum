@@ -209,6 +209,10 @@ type Config struct {
 
 	// OverrideTerminalTotalDifficulty (TODO: remove after the fork)
 	OverrideTerminalTotalDifficulty *big.Int `toml:",omitempty"`
+
+	// Validator config
+	ValP2pPort uint
+	ValNodeKey string
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
@@ -218,10 +222,6 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	if chainConfig.Clique != nil {
 		engine = clique.New(chainConfig.Clique, db)
 	} else if chainConfig.Tendermint != nil {
-		// Setup default network id if it is empty.
-		if chainConfig.Tendermint.NetworkID == "" {
-			chainConfig.Tendermint.NetworkID = "evm_" + chainConfig.ChainID.String()
-		}
 		engine = tendermint.New(chainConfig.Tendermint)
 		return engine
 	} else {
