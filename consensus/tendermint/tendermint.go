@@ -85,8 +85,6 @@ type Tendermint struct {
 	config        *params.TendermintConfig // Consensus engine configuration parameters
 	rootCtxCancel context.CancelFunc
 	rootCtx       context.Context
-	governance    *gov.Governance
-	chain         *core.BlockChain
 }
 
 // New creates a Clique proof-of-authority consensus engine with the initial
@@ -103,15 +101,7 @@ func New(config *params.TendermintConfig) *Tendermint {
 	}
 }
 
-func (c *Tendermint) SetBlockChain(chain *core.BlockChain) {
-	// governance
-	governance := gov.New(c.config.Epoch, chain)
-	c.governance = governance
-	c.chain = chain
-}
-
-func (c *Tendermint) Init(makeBlock func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error)) (err error) {
-	chain := c.chain
+func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error)) (err error) {
 	// Outbound gossip message queue
 	sendC := make(chan pbftconsensus.Message, 1000)
 
@@ -141,7 +131,7 @@ func (c *Tendermint) Init(makeBlock func(parent common.Hash, coinbase common.Add
 		return &types.FullBlock{Block: block, LastCommit: parentHeader.Commit}
 	}
 	// datastore
-	store := adapter.NewStore(chain, c.governance, c.VerifyHeader, makeFullBlock)
+	store := adapter.NewStore(chain, c.VerifyHeader, makeFullBlock)
 
 	// validator key
 	valKey, err := loadValidatorKey(c.config.ValKeyPath)
@@ -281,8 +271,12 @@ func (c *Tendermint) verifyHeader(chain consensus.ChainHeaderReader, header *typ
 		return consensus.ErrFutureBlock
 	}
 
-	if number%c.config.Epoch != 0 && len(header.NextValidators) != 0 {
-		return errors.New("NextValidators must be empty for non-epoch block")
+	governance := gov.New(c.config.Epoch, chain)
+	if !gov.CompareValidators(header.NextValidators, governance.NextValidators(number)) {
+		return errors.New("NextValidators is incorrect")
+	}
+	if !gov.CompareValidatorPowers(header.NextValidatorPowers, governance.NextValidatorPowers(number)) {
+		return errors.New("NextValidatorPowers is incorrect")
 	}
 	if len(header.NextValidatorPowers) != len(header.NextValidators) {
 		return errors.New("NextValidators must have the same len as powers")
@@ -376,12 +370,9 @@ func (c *Tendermint) Prepare(chain consensus.ChainHeaderReader, header *types.He
 	header.Time = timestamp / 1000
 	header.Difficulty = big.NewInt(1)
 
-	if (number % c.config.Epoch) != 0 {
-		header.NextValidators = []common.Address{}
-		header.NextValidatorPowers = []uint64{}
-	} else {
-		header.NextValidators = c.governance.NextValidators(number)
-	}
+	governance := gov.New(c.config.Epoch, chain)
+	header.NextValidators = governance.NextValidators(number)
+	header.NextValidatorPowers = governance.NextValidatorPowers(number)
 
 	return nil
 }
@@ -407,7 +398,6 @@ func (c *Tendermint) FinalizeAndAssemble(chain consensus.ChainHeaderReader, head
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Tendermint) Seal(chain consensus.ChainHeaderReader, block *types.Block, resultCh chan<- *types.Block, stop <-chan struct{}) error {
-
 	panic("should never be called")
 }
 
