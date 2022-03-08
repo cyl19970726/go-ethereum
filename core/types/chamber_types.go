@@ -102,7 +102,7 @@ func (commit *Commit) GetVote(valIdx int32) *Vote {
 		Type:             PrecommitType,
 		Height:           commit.Height,
 		Round:            SafeConvertInt32FromUint32(commit.Round),
-		BlockID:          commit.BlockID,
+		BlockID:          commitSig.BlockID(commit.BlockID),
 		TimestampMs:      commitSig.TimestampMs,
 		ValidatorAddress: commitSig.ValidatorAddress,
 		ValidatorIndex:   valIdx,
