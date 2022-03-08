@@ -230,6 +230,8 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 		log.Info("Chamber consensus in validator mode", "validator_addr", pubkey.Address())
 	}
 
+	p2pserver.SetConsensusState(consensusState)
+
 	err = consensusState.Start(rootCtx)
 	if err != nil {
 		log.Warn("consensusState.Start", "err", err)
