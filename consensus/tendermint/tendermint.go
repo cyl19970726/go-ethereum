@@ -231,9 +231,18 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 	return
 }
 
+var TestMode bool
+
 func loadP2pKey(filename string) (key p2pcrypto.PrivKey, err error) {
 	b, err := ioutil.ReadFile(filename)
 	if err != nil {
+		if TestMode {
+			priv, _, err := p2pcrypto.GenerateKeyPair(p2pcrypto.Ed25519, -1)
+			if err != nil {
+				panic(err)
+			}
+			return priv, nil
+		}
 		err = fmt.Errorf("failed to read node key: %w", err)
 		return
 	}
