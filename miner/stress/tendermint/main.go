@@ -49,7 +49,7 @@ import (
 )
 
 func main() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
 	tendermint.TestMode = true
@@ -158,8 +158,17 @@ func main() {
 			for _, node := range stacks {
 				node.Close()
 			}
-			return
 		default:
+			// after the block halting issue is fixed, should comment out this code block
+			{
+				for i, node := range nodes {
+					tm := node.Engine().(*tendermint.Tendermint)
+					ps := tm.P2pServer().Host.Network().Peers()
+					log.Info("node peers", "#peers", len(ps), "i", i)
+				}
+				time.Sleep(time.Second)
+				continue
+			}
 		}
 
 		// Pick a random signer node
