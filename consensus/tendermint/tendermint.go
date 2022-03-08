@@ -161,16 +161,29 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 		}
 	}()
 
-	genesis := chain.GetHeaderByNumber(0)
-	gcs := pbftconsensus.MakeGenesisChainState(
+	gov := gov.New(c.config.Epoch, chain)
+	block := chain.CurrentHeader()
+	number := block.Number.Uint64()
+	var lastValidators []common.Address
+	var lastValidatorPowers []uint64
+	if number != 0 {
+		lastValidators = gov.EpochValidators(number - 1)
+		lastValidatorPowers = gov.EpochValidatorPowers(number - 1)
+	}
+	gcs := pbftconsensus.MakeChainState(
 		c.config.NetworkID,
-		genesis.Time,
-		genesis.NextValidators,
-		types.U64ToI64Array(genesis.NextValidatorPowers),
+		number,
+		block.Hash(),
+		block.TimeMs,
+		gov.EpochValidators(number),
+		types.U64ToI64Array(gov.EpochValidatorPowers(number)),
+		gov.NextValidators(number),
+		types.U64ToI64Array(gov.NextValidatorPowers(number)),
+		lastValidators,
+		types.U64ToI64Array(lastValidatorPowers),
 		c.config.Epoch,
 		int64(c.config.ProposerRepetition),
 	)
-	gcs.LastBlockID = genesis.Hash()
 
 	// consensus
 	consensusState := pbftconsensus.NewConsensusState(
