@@ -365,6 +365,17 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
+
+	tm, isTm := w.engine.(*tendermint.Tendermint)
+	if isTm {
+		err := tm.Init(w.chain, func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
+			return w.getSealingBlock(parent, timestamp, coinbase, common.Hash{})
+		})
+		if err != nil {
+			log.Crit("tm.Init", "err", err)
+		}
+	}
+
 	atomic.StoreInt32(&w.running, 1)
 	w.startCh <- struct{}{}
 }
@@ -422,7 +433,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
-	tm, isTm := w.engine.(*tendermint.Tendermint)
+	_, isTm := w.engine.(*tendermint.Tendermint)
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
@@ -454,12 +465,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			clearPending(w.chain.CurrentBlock().NumberU64())
 
 			if isTm {
-				err := tm.Init(w.chain, func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
-					return w.getSealingBlock(parent, timestamp, coinbase, common.Hash{})
-				})
-				if err != nil {
-					log.Crit("tm.Init", "err", err)
-				}
 				continue
 			}
 
