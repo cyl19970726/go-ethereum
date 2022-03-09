@@ -409,11 +409,6 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 	return time.Duration(int64(next))
 }
 
-func (w *worker) makeBlock(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
-
-	return w.getSealingBlock(parent, timestamp, coinbase, common.Hash{})
-}
-
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.
 func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer w.wg.Done()
@@ -427,7 +422,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer timer.Stop()
 	<-timer.C // discard the initial tick
 
-	_, isTm := w.engine.(*tendermint.Tendermint)
+	tm, isTm := w.engine.(*tendermint.Tendermint)
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
 		if interrupt != nil {
@@ -459,6 +454,12 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			clearPending(w.chain.CurrentBlock().NumberU64())
 
 			if isTm {
+				err := tm.Init(w.chain, func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
+					return w.getSealingBlock(parent, timestamp, coinbase, common.Hash{})
+				})
+				if err != nil {
+					log.Crit("tm.Init", "err", err)
+				}
 				continue
 			}
 
