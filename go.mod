@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.7.0
-	github.com/QuarkChain/go-minimal-pbft v0.0.0-20220307211413-49a75ab4c3f2
+	github.com/QuarkChain/go-minimal-pbft v0.0.0-20220309025448-1a13edd735c1
 	github.com/VictoriaMetrics/fastcache v1.6.0
 	github.com/aws/aws-sdk-go-v2 v1.2.0
 	github.com/aws/aws-sdk-go-v2/config v1.1.1
@@ -43,6 +43,7 @@ require (
 	github.com/libp2p/go-libp2p-core v0.8.6
 	github.com/mattn/go-colorable v0.1.12
 	github.com/mattn/go-isatty v0.0.14
+	github.com/multiformats/go-multiaddr v0.3.3
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
@@ -64,5 +65,3 @@ require (
 	gopkg.in/olebedev/go-duktape.v3 v3.0.0-20200619000410-60c24ae608a6
 	gopkg.in/urfave/cli.v1 v1.20.0
 )
-
-replace github.com/QuarkChain/go-minimal-pbft => ../go-minimal-pbft

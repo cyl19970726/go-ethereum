@@ -90,6 +90,8 @@ type Tendermint struct {
 
 	lock    sync.RWMutex // Protects the signer fields
 	privVal pbftconsensus.PrivValidator
+
+	p2pserver *libp2p.Server
 }
 
 // New creates a Clique proof-of-authority consensus engine with the initial
@@ -125,6 +127,10 @@ func (c *Tendermint) getPrivValidator() pbftconsensus.PrivValidator {
 	return c.privVal
 }
 
+func (c *Tendermint) P2pServer() *libp2p.Server {
+	return c.p2pserver
+}
+
 func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error)) (err error) {
 	// Outbound gossip message queue
 	sendC := make(chan pbftconsensus.Message, 1000)
@@ -151,6 +157,8 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 	if err != nil {
 		return
 	}
+
+	c.p2pserver = p2pserver
 
 	go func() {
 		err := p2pserver.Run(rootCtx)
@@ -216,7 +224,25 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 	return
 }
 
+var TestMode bool
+
+func EnableTestMode() {
+	TestMode = true
+	libp2p.TestMode = true
+}
+
 func getOrCreateNodeKey(path string) (p2pcrypto.PrivKey, error) {
+	if TestMode {
+		path = ""
+	}
+	if path == "" {
+		priv, _, err := p2pcrypto.GenerateKeyPair(p2pcrypto.Ed25519, -1)
+		if err != nil {
+			panic(err)
+		}
+		// don't save priv in test mode
+		return priv, nil
+	}
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

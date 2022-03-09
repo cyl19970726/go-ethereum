@@ -365,6 +365,17 @@ func (w *worker) pendingBlockAndReceipts() (*types.Block, types.Receipts) {
 
 // start sets the running status as 1 and triggers new work submitting.
 func (w *worker) start() {
+
+	tm, isTm := w.engine.(*tendermint.Tendermint)
+	if isTm {
+		err := tm.Init(w.chain, func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
+			return w.getSealingBlock(parent, timestamp, coinbase, common.Hash{})
+		})
+		if err != nil {
+			log.Crit("tm.Init", "err", err)
+		}
+	}
+
 	atomic.StoreInt32(&w.running, 1)
 	w.startCh <- struct{}{}
 }
@@ -407,11 +418,6 @@ func recalcRecommit(minRecommit, prev time.Duration, target float64, inc bool) t
 		}
 	}
 	return time.Duration(int64(next))
-}
-
-func (w *worker) makeBlock(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
-
-	return w.getSealingBlock(parent, timestamp, coinbase, common.Hash{})
 }
 
 // newWorkLoop is a standalone goroutine to submit new sealing work upon received events.

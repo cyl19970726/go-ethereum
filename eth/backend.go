@@ -505,13 +505,6 @@ func (s *Ethereum) StartMining(threads int) error {
 			}
 			if tm != nil {
 				tm.Authorize(eb, wallet.SignData)
-
-				err := tm.Init(s.blockchain, func(parent common.Hash, coinbase common.Address, timestamp uint64) (*types.Block, error) {
-					return s.miner.GetSealingBlock(parent, timestamp, coinbase, common.Hash{})
-				})
-				if err != nil {
-					log.Crit("tm.Init", "err", err)
-				}
 			}
 		}
 
