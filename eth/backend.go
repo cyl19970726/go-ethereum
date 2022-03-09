@@ -141,6 +141,22 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if _, ok := genesisErr.(*params.ConfigCompatError); genesisErr != nil && !ok {
 		return nil, genesisErr
 	}
+	if chainConfig.Tendermint != nil {
+		// Setup default network id if it is empty.
+		if chainConfig.Tendermint.NetworkID == "" {
+			chainConfig.Tendermint.NetworkID = "evm_" + chainConfig.ChainID.String()
+		}
+		// Setup p2p port
+		if config.ValP2pPort != 0 {
+			chainConfig.Tendermint.P2pPort = config.ValP2pPort
+		}
+		// Setup p2p node key
+		// TODO: Use node key in default datadir
+		if config.ValNodeKey != "" {
+			chainConfig.Tendermint.NodeKeyPath = config.ValNodeKey
+		}
+	}
+
 	log.Info("Initialised chain configuration", "config", chainConfig)
 
 	if err := pruner.RecoverPruning(stack.ResolvePath(""), chainDb, stack.ResolvePath(config.TrieCleanCacheJournal)); err != nil {

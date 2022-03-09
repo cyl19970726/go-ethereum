@@ -173,6 +173,14 @@ var (
 		Name:  "web3q_mainnet",
 		Usage: "Web3Q mainnet",
 	}
+	ValPortFlag = cli.Int64Flag{
+		Name:  "validator.port",
+		Usage: "Validator P2P port",
+	}
+	ValNodeKeyFlag = cli.StringFlag{
+		Name:  "validator.nodekey",
+		Usage: "Validator P2P node key file",
+	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
 		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
@@ -1412,6 +1420,15 @@ func setEthash(ctx *cli.Context, cfg *ethconfig.Config) {
 	}
 }
 
+func setTendermint(ctx *cli.Context, cfg *ethconfig.Config) {
+	if ctx.GlobalIsSet(ValPortFlag.Name) {
+		cfg.ValP2pPort = ctx.GlobalUint(ValPortFlag.Name)
+	}
+	if ctx.GlobalIsSet(ValNodeKeyFlag.Name) {
+		cfg.ValNodeKey = ctx.GlobalString(ValNodeKeyFlag.Name)
+	}
+}
+
 func setMiner(ctx *cli.Context, cfg *miner.Config) {
 	if ctx.GlobalIsSet(MinerNotifyFlag.Name) {
 		cfg.Notify = strings.Split(ctx.GlobalString(MinerNotifyFlag.Name), ",")
@@ -1522,6 +1539,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
+	setTendermint(ctx, cfg)
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
