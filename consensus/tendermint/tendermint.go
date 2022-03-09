@@ -232,16 +232,16 @@ func EnableTestMode() {
 }
 
 func getOrCreateNodeKey(path string) (p2pcrypto.PrivKey, error) {
+	if TestMode {
+		path = ""
+	}
 	if path == "" {
-		if TestMode {
-			priv, _, err := p2pcrypto.GenerateKeyPair(p2pcrypto.Ed25519, -1)
-			if err != nil {
-				panic(err)
-			}
-			// don't save priv in test mode
-			return priv, nil
+		priv, _, err := p2pcrypto.GenerateKeyPair(p2pcrypto.Ed25519, -1)
+		if err != nil {
+			panic(err)
 		}
-		return nil, fmt.Errorf("node key path is empty")
+		// don't save priv in test mode
+		return priv, nil
 	}
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
