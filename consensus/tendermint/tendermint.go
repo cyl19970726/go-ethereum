@@ -230,7 +230,19 @@ func EnableTestMode() {
 	TestMode = true
 	libp2p.TestMode = true
 }
+
 func getOrCreateNodeKey(path string) (p2pcrypto.PrivKey, error) {
+	if path == "" {
+		if TestMode {
+			priv, _, err := p2pcrypto.GenerateKeyPair(p2pcrypto.Ed25519, -1)
+			if err != nil {
+				panic(err)
+			}
+			// don't save priv in test mode
+			return priv, nil
+		}
+		return nil, fmt.Errorf("node key path is empty")
+	}
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -239,11 +251,6 @@ func getOrCreateNodeKey(path string) (p2pcrypto.PrivKey, error) {
 			priv, _, err := p2pcrypto.GenerateKeyPair(p2pcrypto.Ed25519, -1)
 			if err != nil {
 				panic(err)
-			}
-
-			if TestMode {
-				// don't save priv in test mode
-				return priv, nil
 			}
 
 			s, err := p2pcrypto.MarshalPrivateKey(priv)

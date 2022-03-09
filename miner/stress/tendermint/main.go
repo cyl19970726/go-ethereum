@@ -222,6 +222,7 @@ func makeGenesis(faucets []*ecdsa.PrivateKey, sealers []*ecdsa.PrivateKey) *core
 	genesis := core.DefaultWeb3QGalileoGenesisBlock()
 	genesis.GasLimit = 25000000
 	genesis.Config.Tendermint.P2pPort = 0
+	genesis.Config.Tendermint.NodeKeyPath = ""
 
 	genesis.Alloc = core.GenesisAlloc{}
 	for _, faucet := range faucets {
