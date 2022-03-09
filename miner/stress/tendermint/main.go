@@ -49,7 +49,7 @@ import (
 )
 
 func main() {
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlDebug, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
 	tendermint.TestMode = true
@@ -118,8 +118,30 @@ func main() {
 
 		// Connect libp2p
 		tm := node.Engine().(*tendermint.Tendermint)
-		for len(tm.P2pServer().Host.Network().ListenAddresses()) == 0 {
-			time.Sleep(250 * time.Millisecond)
+		for {
+			if tm.P2pServer() == nil {
+				log.Info("P2pServer nil")
+				time.Sleep(250 * time.Millisecond)
+				continue
+			}
+			host := tm.P2pServer().Host
+			if host == nil {
+				log.Info("host nil")
+				time.Sleep(250 * time.Millisecond)
+				continue
+			}
+			network := host.Network()
+			if network == nil {
+				log.Info("network nil")
+				time.Sleep(250 * time.Millisecond)
+				continue
+			}
+			if len(network.ListenAddresses()) == 0 {
+				log.Info("network #listen addr = 0")
+				time.Sleep(250 * time.Millisecond)
+				continue
+			}
+			break
 		}
 		for _, maddr := range maddrs {
 
