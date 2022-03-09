@@ -52,7 +52,7 @@ func main() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 	fdlimit.Raise(2048)
 
-	tendermint.TestMode = true
+	tendermint.EnableTestMode()
 	// Generate a batch of accounts to seal and fund with
 	faucets := make([]*ecdsa.PrivateKey, 128)
 	for i := 0; i < len(faucets); i++ {
@@ -182,15 +182,15 @@ func main() {
 			}
 		default:
 			// after the block halting issue is fixed, should comment out this code block
-			{
-				for i, node := range nodes {
-					tm := node.Engine().(*tendermint.Tendermint)
-					ps := tm.P2pServer().Host.Network().Peers()
-					log.Info("node peers", "#peers", len(ps), "i", i)
-				}
-				time.Sleep(time.Second)
-				continue
-			}
+			// {
+			// 	for i, node := range nodes {
+			// 		tm := node.Engine().(*tendermint.Tendermint)
+			// 		ps := tm.P2pServer().Host.Network().Peers()
+			// 		log.Info("node peers", "#peers", len(ps), "i", i)
+			// 	}
+			// 	time.Sleep(time.Second)
+			// 	continue
+			// }
 		}
 
 		// Pick a random signer node
