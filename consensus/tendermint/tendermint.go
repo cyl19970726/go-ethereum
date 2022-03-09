@@ -20,11 +20,11 @@ package tendermint
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/big"
+	"os"
 	"sync"
 	"time"
 
@@ -40,12 +40,12 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	p2pcrypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 // Clique proof-of-authority protocol constants.
@@ -137,28 +137,11 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 	c.rootCtxCancel = rootCtxCancel
 	c.rootCtx = rootCtx
 
-	makeFullBlock := func(parentHash common.Hash, coinbase common.Address, timestamp uint64) *types.FullBlock {
-		log.Info("Making a block", "parent", parentHash)
-		block, err := makeBlock(parentHash, coinbase, timestamp)
-		if err != nil {
-			log.Warn("makeBlock", "err", err)
-			return nil
-		}
-		if block == nil {
-			log.Warn("makeBlock returns nil block")
-			return nil
-		}
-		parentHeader := chain.GetHeaderByHash(block.ParentHash())
-		if parentHeader == nil {
-			return nil
-		}
-		return &types.FullBlock{Block: block, LastCommit: parentHeader.Commit}
-	}
 	// datastore
-	store := adapter.NewStore(chain, c.VerifyHeader, makeFullBlock)
+	store := adapter.NewStore(chain, c.VerifyHeader, makeBlock)
 
 	// p2p key
-	p2pPriv, err := loadP2pKey(c.config.NodeKeyPath)
+	p2pPriv, err := getOrCreateNodeKey(c.config.NodeKeyPath)
 	if err != nil {
 		return
 	}
@@ -226,38 +209,55 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 		log.Warn("consensusState.Start", "err", err)
 	}
 
+	p2pserver.SetConsensusState(consensusState)
+
 	log.Info("Chamber consensus engine started", "networkd_id", c.config.NetworkID)
 
 	return
 }
 
-func loadP2pKey(filename string) (key p2pcrypto.PrivKey, err error) {
-	b, err := ioutil.ReadFile(filename)
+func getOrCreateNodeKey(path string) (p2pcrypto.PrivKey, error) {
+	b, err := ioutil.ReadFile(path)
 	if err != nil {
-		err = fmt.Errorf("failed to read node key: %w", err)
-		return
-	}
-	key, err = p2pcrypto.UnmarshalPrivateKey(b)
-	if err != nil {
-		err = fmt.Errorf("failed to unmarshal node key: %w", err)
-		return
-	}
-	return
-}
+		if os.IsNotExist(err) {
+			log.Info("No node key found, generating a new one...", "path", path)
 
-// loadValidatorKey loads a serialized guardian key from disk.
-func loadValidatorKey(filename string) (*ecdsa.PrivateKey, error) {
-	b, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
+			priv, _, err := p2pcrypto.GenerateKeyPair(p2pcrypto.Ed25519, -1)
+			if err != nil {
+				panic(err)
+			}
+
+			s, err := p2pcrypto.MarshalPrivateKey(priv)
+			if err != nil {
+				panic(err)
+			}
+
+			err = ioutil.WriteFile(path, s, 0600)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write node key: %w", err)
+			}
+
+			return priv, nil
+		} else {
+			return nil, fmt.Errorf("failed to read node key: %w", err)
+		}
 	}
 
-	gk, err := crypto.ToECDSA(b)
+	priv, err := p2pcrypto.UnmarshalPrivateKey(b)
 	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize raw key data: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal node key: %w", err)
 	}
 
-	return gk, nil
+	peerID, err := peer.IDFromPrivateKey(priv)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Info("Found existing node key",
+		"path", path,
+		"peerID", peerID)
+
+	return priv, nil
 }
 
 // Author implements consensus.Engine, returning the Ethereum address recovered

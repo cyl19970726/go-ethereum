@@ -149,6 +149,8 @@ var (
 		utils.Web3QTestnetFlag,
 		utils.Web3QGalileoFlag,
 		utils.Web3QMainnetFlag,
+		utils.ValPortFlag,
+		utils.ValNodeKeyFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
