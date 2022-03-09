@@ -180,6 +180,7 @@ func main() {
 			for _, node := range stacks {
 				node.Close()
 			}
+			return
 		default:
 			// after the block halting issue is fixed, should comment out this code block
 			// {
