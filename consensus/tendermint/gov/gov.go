@@ -29,12 +29,14 @@ func (g *Governance) GetValidatorSets(height uint64) (*types.ValidatorSet, *type
 }
 
 // GetValidatorSet returns the validator set of a height
+
 func (g *Governance) GetValidatorSet(height uint64, lastVals *types.ValidatorSet) *types.ValidatorSet {
 	if height == 0 {
 		return &types.ValidatorSet{}
 	}
 
 	idxInEpoch := (height - 1) % g.config.Epoch
+
 	if idxInEpoch != 0 && lastVals != nil {
 		// use cached version if we do not have a validator change
 		cvals := lastVals.Copy()
