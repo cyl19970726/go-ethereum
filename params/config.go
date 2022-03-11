@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -34,6 +35,7 @@ var (
 	RinkebyGenesisHash      = common.HexToHash("0x6341fd3daf94b748c72ced5a5b26028f2474f5f00d824504e4fa37a75767e177")
 	GoerliGenesisHash       = common.HexToHash("0xbf7e331f7f7c1dd2e05159666b3bf8bc7a8a3a9eb1d518969eab529dd9b88c1a")
 	Web3QTestnetGenesisHash = common.HexToHash("0x1cf5a870ae77dcff37b14ca5ca8ba05d428e3dc722f544f958c4e19e4747953d")
+	Web3QGalileoGenesisHash = common.HexToHash("0xa576a985390f3a643e2acdeaed074cc9866c99f6bdf3ca8c49ec959054703745")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -277,6 +279,13 @@ var (
 		},
 	}
 
+	Web3QGalileoValBootnodes = []string{
+		"/ip4/164.92.88.137/udp/33333/quic/p2p/12D3KooWRqZRJf6gYeLgeUnNCnKeRb29KiEVQcvRWk2tet9Q3Hmy",
+		"/ip4/206.189.46.182/udp/33333/quic/p2p/12D3KooWHHrPiZByNDq2NYrrTBMctNsrW5gVDTmZsA11oz9nGYcd",
+		"/ip4/206.189.8.208/udp/33333/quic/p2p/12D3KooWEbLvByXLC1dxT6f6CdBC6Qguinio83gutNGBE6KJoNUw",
+		"/ip4/159.65.150.177/udp/33333/quic/p2p/12D3KooWCJJmfgCCjgnusqhpW28Sc3Vqwwe8CRe7T5KpyjomsxF2",
+	}
+
 	// Web3QGalileoChainConfig contains the chain parameters to run a node on the Web3Q test network.
 	Web3QGalileoChainConfig = &ChainConfig{
 		ChainID:             big.NewInt(3334),
@@ -298,8 +307,8 @@ var (
 			Epoch:              100800, // expect 6s block interval = one week
 			P2pPort:            33333,
 			ProposerRepetition: 8,
-			P2pBootstrap:       "/ip4/127.0.0.1/udp/33333/quic/p2p/12D3KooWRqZRJf6gYeLgeUnNCnKeRb29KiEVQcvRWk2tet9Q3Hmy",
-			NodeKeyPath:        "/Users/qizhou/.ssh/node_galileo.key",
+			P2pBootstrap:       strings.Join(Web3QGalileoValBootnodes, ","),
+			NodeKeyPath:        "",
 			ConsensusConfig: ConsensusConfig{
 				// WalPath:                     filepath.Join(defaultDataDir, "cs.wal", "wal"),
 				TimeoutPropose:               3000 * time.Millisecond,
