@@ -174,7 +174,7 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 
 	block := chain.CurrentHeader()
 	number := block.Number.Uint64()
-	last, current, next := gov.GetValidatorSets(number + 1)
+	last, current := gov.GetValidatorSets(number + 1)
 
 	gcs := pbftconsensus.MakeChainState(
 		c.config.NetworkID,
@@ -183,7 +183,6 @@ func (c *Tendermint) Init(chain *core.BlockChain, makeBlock func(parent common.H
 		block.TimeMs,
 		last,
 		current,
-		next,
 		c.config.Epoch,
 		int64(c.config.ProposerRepetition),
 	)

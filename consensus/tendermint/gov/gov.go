@@ -16,16 +16,15 @@ func New(config *params.TendermintConfig, chain consensus.ChainHeaderReader) *Go
 	return &Governance{config: config, chain: chain}
 }
 
-// Returns the validator sets for last, current, next blocks
-func (g *Governance) GetValidatorSets(height uint64) (*types.ValidatorSet, *types.ValidatorSet, *types.ValidatorSet) {
+// Returns the validator sets for last, current blocks
+func (g *Governance) GetValidatorSets(height uint64) (*types.ValidatorSet, *types.ValidatorSet) {
 	if height == 0 {
 		panic("cannot get genesis validator set")
 	}
 
 	last := g.GetValidatorSet(height-1, nil)
 	current := g.GetValidatorSet(height, last)
-	next := g.GetValidatorSet(height+1, current)
-	return last, current, next
+	return last, current
 }
 
 // GetValidatorSet returns the validator set of a height

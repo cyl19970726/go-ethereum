@@ -4,7 +4,7 @@ go 1.15
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.7.0
-	github.com/QuarkChain/go-minimal-pbft v0.0.0-20220309221209-4a8b73a5d901
+	github.com/QuarkChain/go-minimal-pbft v0.0.0-20220310232643-dcc46ad089a1
 	github.com/VictoriaMetrics/fastcache v1.6.0
 	github.com/aws/aws-sdk-go-v2 v1.2.0
 	github.com/aws/aws-sdk-go-v2/config v1.1.1
