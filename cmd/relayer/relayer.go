@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/rlp"
 	"io"
 	"io/ioutil"
 	"math"
@@ -20,7 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
@@ -178,8 +178,6 @@ func runRelay(cmd *cobra.Command, args []string) {
 				goto sleep
 			}
 
-			blockNumber = uint64(806400)
-
 			header, err = relayer.web3qClient.HeaderByNumber(relayer.ctx, new(big.Int).SetUint64(blockNumber))
 			if err != nil {
 				log.Error("FetchWeb3qHeader failed", "err", err.Error())
@@ -238,17 +236,22 @@ func (r *relayer) SubmitHeaderToContract(header *types.Header) error {
 		return err
 	}
 
-	data, err := r.valABI.Pack(SubmitHeaderFunc, eHeader, header.Commit.Signatures)
+	eCommit, err := rlp.EncodeToBytes(header.Commit)
 	if err != nil {
 		return err
 	}
 
-	gasPrice, err := r.ethClient.SuggestGasPrice(rootCtx)
+	data, err := r.valABI.Pack(SubmitHeaderFunc, eHeader, eCommit)
 	if err != nil {
 		return err
 	}
 
-	nonce, err := r.ethClient.PendingNonceAt(rootCtx, crypto.PubkeyToAddress(r.privKey.PublicKey))
+	gasPrice, err := r.ethClient.SuggestGasPrice(r.ctx)
+	if err != nil {
+		return err
+	}
+
+	nonce, err := r.ethClient.PendingNonceAt(r.ctx, crypto.PubkeyToAddress(r.privKey.PublicKey))
 	if err != nil {
 		return err
 	}
@@ -267,7 +270,7 @@ func (r *relayer) SubmitHeaderToContract(header *types.Header) error {
 		return err
 	}
 
-	return ethCli.SendTransaction(rootCtx, signedTx)
+	return ethCli.SendTransaction(r.ctx, signedTx)
 }
 
 func (r *relayer) GetNextEpochHeight(blockNumber uint64) (uint64, error) {
