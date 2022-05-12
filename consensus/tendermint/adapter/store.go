@@ -1,32 +1,41 @@
 package adapter
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	pbft "github.com/ethereum/go-ethereum/consensus/tendermint/consensus"
+	"github.com/ethereum/go-ethereum/consensus/tendermint/gov"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 )
 
+var prefix = []byte("HeaderNumber")
+
 type Store struct {
+	config           *params.TendermintConfig
 	chain            *core.BlockChain
 	verifyHeaderFunc func(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error
 	makeBlock        func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.Block, err error)
+	gov              *gov.Governance
 	mux              *event.TypeMux
 }
 
 func NewStore(
+	config *params.TendermintConfig,
 	chain *core.BlockChain,
 	verifyHeaderFunc func(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error,
 	makeBlock func(parentHash common.Hash, coinbase common.Address, timestamp uint64) (block *types.Block, err error),
+	gov *gov.Governance,
 	mux *event.TypeMux) *Store {
-	return &Store{chain: chain, verifyHeaderFunc: verifyHeaderFunc, makeBlock: makeBlock, mux: mux}
+	return &Store{config: config, chain: chain, verifyHeaderFunc: verifyHeaderFunc, makeBlock: makeBlock, gov: gov, mux: mux}
 }
 
 func (s *Store) Base() uint64 {
@@ -82,9 +91,45 @@ func (s *Store) SaveBlock(block *types.FullBlock, commit *types.Commit) {
 
 // Validate a block without Commit and with LastCommit.
 func (s *Store) ValidateBlock(state pbft.ChainState, block *types.FullBlock) (err error) {
-	err = s.verifyHeaderFunc(s.chain, block.Header(), false)
+	header := block.Header()
+	err = s.verifyHeaderFunc(s.chain, header, false)
 	if err != nil {
 		return
+	}
+
+	validators, powers := []common.Address{}, []uint64{}
+	if header.Number.Uint64()%s.config.Epoch == 0 {
+		epochId := header.Number.Uint64() / s.config.Epoch
+		remoteChainNumber := uint64(0)
+		hash, emptyHash := common.Hash{}, common.Hash{}
+		if s.config.ValidatorChangeEpochId > 0 && s.config.ValidatorChangeEpochId <= epochId {
+			l := len(prefix)
+			if len(header.Extra) >= l+8+32 && bytes.Compare(header.Extra[:l], prefix) == 0 {
+				nb := header.Extra[l : l+8]
+				remoteChainNumber = binary.BigEndian.Uint64(nb)
+				if remoteChainNumber == 0 {
+					return errors.New("invalid remoteChainNumber in header.Extra")
+				}
+				hb := header.Extra[l+8 : l+8+32]
+				hash = common.BytesToHash(hb)
+				if hash == emptyHash {
+					return errors.New("invalid remote block hash in header.Extra")
+				}
+			} else {
+				return errors.New("header.Extra missing validator chain block height and hash")
+			}
+		}
+
+		validators, powers, err = s.gov.NextValidatorsAndPowersAt(epochId, remoteChainNumber, hash)
+		if err != nil {
+			return errors.New(fmt.Sprintf("verifyHeader failed with %s", err.Error()))
+		}
+	}
+	if !gov.CompareValidators(header.NextValidators, validators) {
+		return errors.New("NextValidators is incorrect")
+	}
+	if !gov.CompareValidatorPowers(header.NextValidatorPowers, powers) {
+		return errors.New("NextValidatorPowers is incorrect")
 	}
 
 	// Validate if the block matches current state.
@@ -234,6 +279,33 @@ func (s *Store) MakeBlock(
 	}
 	header.TimeMs = timestampMs
 	header.LastCommitHash = commit.Hash()
+
+	if height%s.config.Epoch == 0 {
+		epochId := height / s.config.Epoch
+		remoteChainNumber := uint64(0)
+		hash := common.Hash{}
+
+		header.NextValidators, header.NextValidatorPowers, remoteChainNumber, hash, err =
+			s.gov.NextValidatorsAndPowersForProposal(epochId)
+		if err != nil {
+			log.Error(err.Error())
+			return nil
+		}
+
+		// remoteChainNumber == 0 when NextValidatorsAndPowers return err or
+		// when update validator from contract is not enable. as err has been handled above.
+		// so only when remoteChainNumber != 0 need to add number and hash to header.Extra.
+		if remoteChainNumber != 0 {
+			data := prefix
+			b := make([]byte, 8)
+			binary.BigEndian.PutUint64(b, remoteChainNumber)
+			data = append(data, b...)
+			data = append(data, hash.Bytes()...)
+			header.Extra = append(data, header.Extra...)
+		}
+	} else {
+		header.NextValidators, header.NextValidatorPowers = []common.Address{}, []uint64{}
+	}
 
 	block = block.WithSeal(header)
 
