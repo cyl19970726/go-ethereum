@@ -386,7 +386,7 @@ var (
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, nil, nil}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
@@ -418,7 +418,7 @@ var (
 		Tendermint:              nil,
 	}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, nil}
+	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, new(EthashConfig), nil, nil, nil}
 	TestRules       = TestChainConfig.Rules(new(big.Int), false)
 )
 
@@ -510,6 +510,9 @@ type ChainConfig struct {
 	Ethash     *EthashConfig     `json:"ethash,omitempty"`
 	Clique     *CliqueConfig     `json:"clique,omitempty"`
 	Tendermint *TendermintConfig `json:"tendermint,omitempty"`
+
+	// external call config
+	ExternalCall *ExternalCallConfig `json:"externalCall,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -539,6 +542,18 @@ type TendermintConfig struct {
 	NodeName               string
 	ProposerRepetition     uint64
 	ConsensusConfig        ConsensusConfig
+}
+
+type ExternalCallConfig struct {
+	EnableBlockNumber *big.Int `json:"enableBlockNumber"`
+	Version           uint64   `json:"version"`
+	SupportChainId    uint64   `json:"supportChainId"`
+	CallRpc           string   `json:"callRpc"`
+}
+
+// String implements the stringer interface
+func (c *ExternalCallConfig) String() string {
+	return "externalCallConfig"
 }
 
 // String implements the stringer interface, returning the consensus engine details.
