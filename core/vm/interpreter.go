@@ -18,14 +18,14 @@ package vm
 
 import (
 	"context"
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/rlp"
 	"hash"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // Config are the configuration options for the Interpreter
