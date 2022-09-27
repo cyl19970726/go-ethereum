@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"github.com/ethereum/go-ethereum/core/types"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -128,6 +129,9 @@ type EVM struct {
 	// available gas is calculated in gasCall* according to the 63/64 rule and later
 	// applied in opCall*.
 	callGasTemp uint64
+
+	// crossChainCallUnExpectErr is an error occurred during the cross-chain-call process
+	crossChainCallUnExpectErr error
 }
 
 // NewEVM returns a new EVM. The returned EVM is not thread safe and should
@@ -145,11 +149,58 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 	return evm
 }
 
+// setCrossChainCallUnExpectErr record error that occur during cross-chain-call
+func (evm *EVM) setCrossChainCallUnExpectErr(err error) {
+	if evm.crossChainCallUnExpectErr == nil {
+		evm.crossChainCallUnExpectErr = err
+	}
+}
+
+// CrossChainCallUnExpectErr return error that occur during cross-chain-call
+func (evm *EVM) CrossChainCallUnExpectErr() error {
+	return evm.crossChainCallUnExpectErr
+}
+
+// ExternalCallClient returns the external-call-client
+func (evm *EVM) ExternalCallClient() ExternalCallClient {
+	return evm.Config.ExternalCallClient
+}
+
+// SetCrossChainCallResults pre-sets the result of the cross-chain-call and is used when verifying the correctness of the transaction
+func (evm *EVM) SetCrossChainCallResults(result []byte) {
+	if evm.ExternalCallClient() == nil && evm.EnableExternalCall() && len(result) != 0 {
+		evm.Interpreter().SetCrossChainCallResults(result)
+	}
+}
+
+// EnableExternalCall returns true if the external-call module is active, otherwise returns false
+func (evm *EVM) EnableExternalCall() bool {
+	if evm.ChainConfig().ExternalCall.EnableBlockNumber != nil && evm.Context.BlockNumber.Cmp(evm.ChainConfig().ExternalCall.EnableBlockNumber) != -1 {
+		return true
+	}
+	return false
+}
+
+// SetCrossChainCallResultsByUncles decodes block.uncles to pre-set the result of the cross-chain-call
+func (evm *EVM) SetCrossChainCallResultsByUncles(uncles []*types.Header, tx *types.Transaction) {
+	if evm.ExternalCallClient() == nil {
+		if len(uncles) != 0 {
+			for _, u := range uncles {
+				if u.TxHash == tx.Hash() {
+					evm.Interpreter().SetCrossChainCallResults(u.Extra)
+					break
+				}
+			}
+		}
+	}
+}
+
 // Reset resets the EVM with a new transaction context.Reset
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) Reset(txCtx TxContext, statedb StateDB) {
 	evm.TxContext = txCtx
 	evm.StateDB = statedb
+	evm.interpreter.resetCrossChainCallResultsAndResultIdx()
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and

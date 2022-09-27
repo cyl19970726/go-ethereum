@@ -17,7 +17,11 @@
 package vm
 
 import (
+	"context"
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/rlp"
 	"hash"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -35,6 +39,14 @@ type Config struct {
 
 	ExtraEips []int // Additional EIPS that are to be enabled
 	IsJsonRpc bool  // Whether the call is in context of JsonRpc
+
+	ExternalCallClient ExternalCallClient // This client is used to make external calls
+}
+
+type ExternalCallClient interface {
+	ethereum.TransactionReader
+	ChainID(ctx context.Context) (*big.Int, error)
+	BlockNumber(ctx context.Context) (uint64, error)
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,
@@ -63,6 +75,11 @@ type EVMInterpreter struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
+
+	// crossChainCallResults will store the return value of each cross-chain call,
+	// and the callResultIdx will increase by 1 for each cross-chain call.
+	crossChainCallResults []*CrossChainCallResults
+	callResultIdx         uint64
 }
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
@@ -106,6 +123,38 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 		evm: evm,
 		cfg: cfg,
 	}
+}
+
+func (in *EVMInterpreter) CallResultIdx() uint64 {
+	return in.callResultIdx
+}
+
+func (in *EVMInterpreter) AddCallResultIdx() {
+	in.callResultIdx++
+}
+
+func (in *EVMInterpreter) CrossChainCallResults() []*CrossChainCallResults {
+	return in.crossChainCallResults
+}
+
+func (in *EVMInterpreter) AppendCrossChainCallResults(trace *CrossChainCallResults) []*CrossChainCallResults {
+	in.crossChainCallResults = append(in.crossChainCallResults, trace)
+	return in.crossChainCallResults
+}
+
+func (in *EVMInterpreter) SetCrossChainCallResults(b []byte) error {
+	cr := &CrossChainCallResultsWithVersion{}
+	err := rlp.DecodeBytes(b, cr)
+	if err != nil {
+		return err
+	}
+	in.crossChainCallResults = cr.Results
+	return nil
+}
+
+func (in *EVMInterpreter) resetCrossChainCallResultsAndResultIdx() {
+	in.crossChainCallResults = nil
+	in.callResultIdx = 0
 }
 
 // Run loops and evaluates the contract's code with the given input data and returns
