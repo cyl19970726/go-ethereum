@@ -19,11 +19,16 @@ package tests
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+	"log"
 	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -305,4 +310,266 @@ func printStateTrie(db *state.StateDB, test *StateTest, t *testing.T) {
 
 func getCreateContractAddr(caller common.Address, nonce uint64) common.Address {
 	return crypto.CreateAddress(caller, nonce)
+}
+
+type WrapClient struct {
+	*backends.SimulatedBackend
+	latestBlock uint64
+}
+
+func NewWrapClient(simulatedBackend *backends.SimulatedBackend) *WrapClient {
+	return &WrapClient{SimulatedBackend: simulatedBackend, latestBlock: 0}
+}
+
+func (c *WrapClient) MintNewBlock(num uint64) {
+	c.latestBlock += num
+}
+
+func (c *WrapClient) BlockNumber(ctx context.Context) (uint64, error) {
+	return c.latestBlock, nil
+}
+
+func (c *WrapClient) ChainID(ctx context.Context) (*big.Int, error) {
+	return c.Blockchain().Config().ChainID, nil
+}
+
+func newMuskBlockChain() (*types.Receipt, *WrapClient, error) {
+	privateKey, err := crypto.GenerateKey()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	chainId := big.NewInt(1337)
+	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainId)
+
+	balance := new(big.Int)
+	balance.SetString("100000000000000000000", 10) // 100 eth in wei
+
+	address := auth.From
+	genesisAlloc := map[common.Address]core.GenesisAccount{
+		address: {
+			Balance: balance,
+		},
+	}
+
+	blockGasLimit := uint64(50000000)
+	client := backends.NewSimulatedBackend(genesisAlloc, blockGasLimit)
+
+	actualChainId := client.Blockchain().Config().ChainID
+	if actualChainId.Cmp(chainId) != 0 {
+		panic("chainId no match")
+	}
+
+	// 1. Deploy a contract with events that can be triggered by calling methods
+	ctx := context.Background()
+	nonce, err := client.PendingNonceAt(ctx, auth.From)
+	if err != nil {
+		panic(err)
+	}
+
+	deployContractTx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   actualChainId,
+		To:        nil,
+		Nonce:     nonce,
+		Data:      common.FromHex("0x608060405234801561001057600080fd5b506105d8806100206000396000f3fe608060405234801561001057600080fd5b50600436106100575760003560e01c8063209652551461005c578063552410771461007a57806381045ead146100965780638ff2dc7e146100b4578063a1611e0e146100be575b600080fd5b6100646100da565b604051610071919061037b565b60405180910390f35b610094600480360381019061008f9190610288565b6100e3565b005b61009e61011a565b6040516100ab919061037b565b60405180910390f35b6100bc610123565b005b6100d860048036038101906100d391906102b5565b610151565b005b60008054905090565b807f44166b8e7efa954701ff28cba73852e3bbb791ac94a02de05fba64d11492fe9f60405160405180910390a28060008190555050565b60008054905090565b7f8e397a038a34466ac8069165f69d2f28bde665accf96372b7e665ee069dd00d260405160405180910390a1565b6002600081819054906101000a900467ffffffffffffffff1680929190610177906104d7565b91906101000a81548167ffffffffffffffff021916908367ffffffffffffffff16021790555050827fdce721dc2d078c030530aeb5511eb76663a705797c2a4a4d41a70dddfb8efca983600260009054906101000a900467ffffffffffffffff16846040516101e893929190610396565b60405180910390a28160008190555082600181905550505050565b6000610216610211846103f9565b6103d4565b9050828152602081018484840111156102325761023161056b565b5b61023d848285610464565b509392505050565b600082601f83011261025a57610259610566565b5b813561026a848260208601610203565b91505092915050565b6000813590506102828161058b565b92915050565b60006020828403121561029e5761029d610575565b5b60006102ac84828501610273565b91505092915050565b6000806000606084860312156102ce576102cd610575565b5b60006102dc86828701610273565b93505060206102ed86828701610273565b925050604084013567ffffffffffffffff81111561030e5761030d610570565b5b61031a86828701610245565b9150509250925092565b600061032f8261042a565b6103398185610435565b9350610349818560208601610473565b6103528161057a565b840191505092915050565b61036681610446565b82525050565b61037581610450565b82525050565b6000602082019050610390600083018461035d565b92915050565b60006060820190506103ab600083018661035d565b6103b8602083018561036c565b81810360408301526103ca8184610324565b9050949350505050565b60006103de6103ef565b90506103ea82826104a6565b919050565b6000604051905090565b600067ffffffffffffffff82111561041457610413610537565b5b61041d8261057a565b9050602081019050919050565b600081519050919050565b600082825260208201905092915050565b6000819050919050565b600067ffffffffffffffff82169050919050565b82818337600083830152505050565b60005b83811015610491578082015181840152602081019050610476565b838111156104a0576000848401525b50505050565b6104af8261057a565b810181811067ffffffffffffffff821117156104ce576104cd610537565b5b80604052505050565b60006104e282610450565b915067ffffffffffffffff8214156104fd576104fc610508565b5b600182019050919050565b7f4e487b7100000000000000000000000000000000000000000000000000000000600052601160045260246000fd5b7f4e487b7100000000000000000000000000000000000000000000000000000000600052604160045260246000fd5b600080fd5b600080fd5b600080fd5b600080fd5b6000601f19601f8301169050919050565b61059481610446565b811461059f57600080fd5b5056fea26469706673582212205a08eea3634f7d27082237722f79299192f3e5c5cd229afea0339c3943dfa0bf64736f6c63430008070033"),
+		GasFeeCap: big.NewInt(7000000000),
+		GasTipCap: big.NewInt(1000000000),
+		Gas:       800000,
+	})
+
+	deployContractTxSigned, err := types.SignTx(deployContractTx, types.MakeSigner(client.Blockchain().Config(), big.NewInt(0)), privateKey)
+	if err != nil {
+		panic(err)
+	}
+
+	err = client.SendTransaction(ctx, deployContractTxSigned)
+	if err != nil {
+		panic(err)
+	}
+
+	client.Commit()
+	contractReceipt, err := client.TransactionReceipt(ctx, deployContractTxSigned.Hash())
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("RECEIPT Addr", contractReceipt.ContractAddress)
+
+	// 2. Call method by sendTransaction to trigger event
+	triggerEventTx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   actualChainId,
+		To:        &contractReceipt.ContractAddress,
+		Nonce:     nonce + 1,
+		Data:      common.FromHex("0xa1611e0e0000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000010aaaaaaaaaaaaaaaabbbbbbbbbbbbbbbb00000000000000000000000000000000"),
+		GasFeeCap: big.NewInt(7000000000),
+		GasTipCap: big.NewInt(1000000000),
+		Gas:       800000,
+	})
+
+	triggerEventTxSigned, err := types.SignTx(triggerEventTx, types.MakeSigner(client.Blockchain().Config(), big.NewInt(0)), privateKey)
+	if err != nil {
+		panic(err)
+	}
+
+	err = client.SendTransaction(ctx, triggerEventTxSigned)
+	if err != nil {
+		panic(err)
+	}
+
+	client.Commit()
+	receipt, err := client.TransactionReceipt(ctx, triggerEventTxSigned.Hash())
+	if err != nil {
+		panic(err)
+	}
+
+	return receipt, NewWrapClient(client), nil
+
+}
+
+func generateExternalCallInput(chainId uint64, dstTxHash common.Hash, logIdx uint64, maxDataLen uint64, confirm uint64) string {
+	method := "99e20070"
+	chainIdStr := addPrefix0(strconv.FormatUint(chainId, 16))
+	txHash := dstTxHash.String()[2:]
+	logIdxStr := addPrefix0(strconv.FormatUint(logIdx, 16))
+	maxDataLenStr := addPrefix0(strconv.FormatUint(maxDataLen, 16))
+	confirmStr := addPrefix0(strconv.FormatUint(confirm, 16))
+
+	return method + chainIdStr + txHash + logIdxStr + maxDataLenStr + confirmStr
+}
+
+func addPrefix0(str string) string {
+	spliceStr := "0000000000000000000000000000000000000000000000000000000000000000"
+	endIndex := len(spliceStr) - len(str)
+	spliceStr = spliceStr[:endIndex]
+	return (spliceStr + str)
+}
+
+func TestCrossChainCallPrecompile(t *testing.T) {
+
+	{
+		// Successful external call transaction
+		rec, client, err := newMuskBlockChain()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		chainId, err := client.ChainID(context.Background())
+
+		var confirm uint64 = 10
+		client.MintNewBlock(confirm + rec.BlockNumber.Uint64())
+
+		input := generateExternalCallInput(chainId.Uint64(), rec.TxHash, 0, 160, confirm)
+
+		result, err := vm.VerifyCrossChainCall(client, input)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		//t.Log(common.Bytes2Hex(result))
+
+		if !bytes.Equal(result, common.FromHex("0x0000000000000000000000005213a3dedb37d935a0955a609c43bcdfc1938ad5000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000002dce721dc2d078c030530aeb5511eb76663a705797c2a4a4d41a70dddfb8efca9000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000010aaaaaaaaaaaaaaaabbbbbbbbbbbbbbbb00000000000000000000000000000000")) {
+			t.Error("incorrect external call result")
+		}
+
+	}
+
+	// Failed external call transaction:Expect Error:CrossChainCall:confirms no enough
+	{
+		rec, client, err := newMuskBlockChain()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		chainId, err := client.ChainID(context.Background())
+
+		var confirm uint64 = 10
+		client.MintNewBlock(confirm + rec.BlockNumber.Uint64() - 1)
+
+		input := generateExternalCallInput(chainId.Uint64(), rec.TxHash, 0, 160, confirm)
+
+		_, err = vm.VerifyCrossChainCall(client, input)
+		if err != nil {
+			if err.Error() != "Expect Error:CrossChainCall:confirms no enough" {
+				t.Error("The resulting error does not match the expected error")
+			}
+		} else {
+			t.Error("expect an error")
+		}
+
+	}
+
+	// Failed external call transaction: Expect Error:CrossChainCall:logIdx out-of-bound
+	{
+		rec, client, err := newMuskBlockChain()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		chainId, err := client.ChainID(context.Background())
+
+		var confirm uint64 = 10
+		client.MintNewBlock(confirm + rec.BlockNumber.Uint64())
+
+		var logIdx_out_range uint64 = 2
+		input := generateExternalCallInput(chainId.Uint64(), rec.TxHash, logIdx_out_range, 160, confirm)
+
+		_, err = vm.VerifyCrossChainCall(client, input)
+		if err != nil {
+			if err.Error() != "Expect Error:CrossChainCall:logIdx out-of-bound" {
+				t.Errorf("The resulting error does not match the expected error; actual err:%s", err.Error())
+			}
+		} else {
+			t.Error("expect an error")
+		}
+
+	}
+
+	// Failed external call transaction: Expect Error:CrossChainCall:chainId 2 no support
+	{
+		rec, client, err := newMuskBlockChain()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var confirm uint64 = 10
+		client.MintNewBlock(confirm + rec.BlockNumber.Uint64())
+
+		var chainId_nosupport uint64 = 2
+		input := generateExternalCallInput(chainId_nosupport, rec.TxHash, 0, 160, confirm)
+
+		_, err = vm.VerifyCrossChainCall(client, input)
+		if err != nil {
+			if err.Error() != "Expect Error:CrossChainCall:chainId 2 no support" {
+				t.Errorf("The resulting error does not match the expected error; actual err:%s", err.Error())
+			}
+		} else {
+			t.Error("expect an error")
+		}
+	}
+
+	// Failed external call transaction: Expect Error:not found
+	{
+		rec, client, err := newMuskBlockChain()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		chainId, err := client.ChainID(context.Background())
+
+		var confirm uint64 = 10
+		client.MintNewBlock(confirm + rec.BlockNumber.Uint64())
+
+		var txHash_noFound string = "0x0000000000000000000000000000000000000000000000000000000000000004"
+		input := generateExternalCallInput(chainId.Uint64(), common.HexToHash(txHash_noFound), 0, 160, confirm)
+
+		_, err = vm.VerifyCrossChainCall(client, input)
+		if err != nil {
+			if err.Error() != "Expect Error:not found" {
+				t.Errorf("The resulting error does not match the expected error; actual err:%s", err.Error())
+			}
+		} else {
+			t.Error("expect an error")
+		}
+	}
+
 }
