@@ -1277,16 +1277,16 @@ func (c *crossChainCall) Run(input []byte) ([]byte, error) {
 }
 
 func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) ([]byte, uint64, error) {
-	if len(input) != 164 {
-		return nil, 0, fmt.Errorf("invalid length of input")
+	if len(input) != CrossChainCallInputLength {
+		return nil, 0, ErrInvalidCrossChainCallInputLength
 	}
 
 	if env.evm.ChainConfig().ExternalCall.EnableBlockNumber == nil {
-		return nil, 0, fmt.Errorf("crossChainCall: external call disable")
+		return nil, 0, ErrDisableExternalCall
 	}
 
 	if env.evm.Context.BlockNumber.Cmp(env.evm.ChainConfig().ExternalCall.EnableBlockNumber) == -1 {
-		return nil, 0, fmt.Errorf("cross chain call is active when when blockNumber reaches %d \n", env.evm.ChainConfig().ExternalCall.EnableBlockNumber.Int64())
+		return nil, 0, ErrExternalCallNoActive
 	}
 
 	ctx := context.Background()

@@ -39,8 +39,11 @@ var (
 	ErrCodeInsufficientStake    = errors.New("insufficient staking for code")
 
 	// ErrOutOfBoundsTracePtr which happen when execute operation of cross chain call
-	ErrOutOfBoundsTracePtr = errors.New("CrossChainCall: tracePtr out-of-bound")
-	ErrUnsupportMethod     = errors.New("unsupported method")
+	ErrOutOfBoundsTracePtr              = errors.New("CrossChainCall: tracePtr out-of-bound")
+	ErrInvalidCrossChainCallInputLength = errors.New("CrossChainCall:invalid CrossChainCallInputLength")
+	ErrDisableExternalCall              = errors.New("CrossChainCall:disable external_call module")
+	ErrExternalCallNoActive             = errors.New("CrossChainCall:external_call is not active")
+	ErrUnsupportMethod                  = errors.New("unsupported method")
 
 	// errStopToken is an internal token indicating interpreter loop termination,
 	// never returned to outside callers.
