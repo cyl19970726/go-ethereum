@@ -1296,13 +1296,13 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 		var list *CrossChainCallResults
 
 		if client == nil {
-			Idx := env.evm.Interpreter().CallResultIdx()
-			if Idx >= uint64(len(env.evm.Interpreter().CrossChainCallResults())) {
+			idx := env.evm.Interpreter().CallResultIdx()
+			if idx >= uint64(len(env.evm.Interpreter().CrossChainCallResults())) {
 				// unexpect error
 				env.evm.setCrossChainCallUnExpectErr(ErrOutOfBoundsTracePtr)
 				return nil, 0, ErrOutOfBoundsTracePtr
 			}
-			list = env.evm.Interpreter().CrossChainCallResults()[Idx]
+			list = env.evm.Interpreter().CrossChainCallResults()[idx]
 			env.evm.Interpreter().AddCallResultIdx()
 
 			if !list.Success {
@@ -1416,7 +1416,6 @@ type GetLogByTxHash struct {
 	// list of topics provided by the contract.
 	Topics []common.Hash `json:"topics" gencodec:"required"`
 	// supplied by the contract, usually ABI-encoded
-	//Data []byte `json:"data" gencodec:"required"`
 	Data []byte `json:"data" gencodec:"required"`
 
 	Args abi.Arguments
