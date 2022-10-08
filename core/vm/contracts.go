@@ -1393,13 +1393,7 @@ func GetExternalLog(ctx context.Context, env *PrecompiledContractCallEnv, chainI
 	log := receipt.Logs[logIdx]
 
 	var data []byte
-	var actualDataLen = uint64(len(log.Data))
-	if actualDataLen <= maxDataLen {
-		data = log.Data
-	} else {
-		data = getData(log.Data, 0, maxDataLen)
-		actualDataLen = maxDataLen
-	}
+	data = getData(log.Data, 0, maxDataLen)
 
 	callres, err := NewGetLogByTxHash(log.Address, log.Topics, data)
 	if err != nil {
