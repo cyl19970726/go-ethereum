@@ -1225,9 +1225,11 @@ var (
 type crossChainCall struct {
 }
 
+const CrossChainCallInputLength = 164
+
 // RequiredGas is the maximum gas consumption that will calculate the cross_chain_call
 func (c *crossChainCall) RequiredGas(input []byte) uint64 {
-	if len(input) != 164 {
+	if len(input) != CrossChainCallInputLength {
 		return 0
 	}
 
