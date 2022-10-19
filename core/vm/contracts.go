@@ -1278,7 +1278,7 @@ func (c *crossChainCall) RequiredGas(input []byte) uint64 {
 }
 
 func (c *crossChainCall) Run(input []byte) ([]byte, error) {
-	return nil, nil
+	return nil, ErrUnsupportMethod
 }
 
 func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) ([]byte, uint64, error) {
