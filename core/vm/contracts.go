@@ -1334,7 +1334,7 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 			} else {
 				// calculate actual cost of gas
 				actualGasUsed := callres.GasCost(params.ExternalCallByteGasCost)
-				actualGasUsed += uint64(len(input)) * params.ExternalCallByteGasCost
+				actualGasUsed += uint64(len(input)) * params.CalldataGasCostEIP4488
 				actualGasUsed += params.ExternalCallGas
 
 				resultValuePack, err := callres.ABIPack()
@@ -1398,7 +1398,12 @@ func GetExternalLog(ctx context.Context, env *PrecompiledContractCallEnv, chainI
 	log := receipt.Logs[logIdx]
 
 	var data []byte
-	data = getData(log.Data, 0, maxDataLen)
+	if uint64(len(log.Data)) > maxDataLen {
+		data = make([]byte, maxDataLen)
+		copy(data, log.Data[:maxDataLen])
+	} else {
+		copy(data, log.Data)
+	}
 
 	callres, err := NewGetLogByTxHash(log.Address, log.Topics, data)
 	if err != nil {
@@ -1503,6 +1508,7 @@ type CrossChainCallResultsWithVersion struct {
 	Results []*CrossChainCallResults
 }
 
+// VerifyCrossChainCall is only used in tests to avoid circular reference
 func VerifyCrossChainCall(eClient ExternalCallClient, externalCallInput string) ([]byte, error) {
 	p := &crossChainCall{}
 
