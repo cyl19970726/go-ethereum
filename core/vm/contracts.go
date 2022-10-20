@@ -1322,6 +1322,11 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 			maxDataLen := new(big.Int).SetBytes(getData(input, 4+96, 32)).Uint64()
 			confirms := new(big.Int).SetBytes(getData(input, 4+128, 32)).Uint64()
 
+			// Ensure that the number of confirmations meets the minimum requirement which is defined by chainConfig
+			if confirms < env.evm.ChainConfig().ExternalCall.ConfirmsNether {
+				confirms = env.evm.ChainConfig().ExternalCall.ConfirmsNether
+			}
+
 			callres, expErr, unexpErr := GetExternalLog(ctx, env, chainId, txHash, logIdx, maxDataLen, confirms)
 
 			if unexpErr != nil {
@@ -1369,6 +1374,12 @@ func GetExternalLog(ctx context.Context, env *PrecompiledContractCallEnv, chainI
 		return nil, expErr, nil
 	}
 
+	latestBlockNumber, err := client.BlockNumber(ctx)
+	if err != nil {
+		// unexpect error
+		return nil, nil, err
+	}
+
 	receipt, err := client.TransactionReceipt(ctx, txHash)
 	if err != nil {
 		if err == ethereum.NotFound {
@@ -1380,11 +1391,6 @@ func GetExternalLog(ctx context.Context, env *PrecompiledContractCallEnv, chainI
 	}
 
 	happenedBlockNumber := receipt.BlockNumber
-	latestBlockNumber, err := client.BlockNumber(ctx)
-	if err != nil {
-		// unexpect error
-		return nil, nil, err
-	}
 
 	if latestBlockNumber-happenedBlockNumber.Uint64() < confirms {
 		// expect error
@@ -1446,29 +1452,6 @@ func NewGetLogByTxHash(address common.Address, topics []common.Hash, data []byte
 	var args = abi.Arguments{arg1, arg2, arg3}
 
 	return &GetLogByTxHash{Address: address, Topics: topics, Data: data, Args: args}, nil
-}
-
-func NewCallResultEmpty() (*GetLogByTxHash, error) {
-	arg1Type, err := abi.NewType("address", "", nil)
-	if err != nil {
-		return nil, err
-	}
-	arg2Type, err := abi.NewType("bytes32[]", "", nil)
-	if err != nil {
-		return nil, err
-	}
-	arg3Type, err := abi.NewType("bytes", "", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	arg1 := abi.Argument{Name: "address", Type: arg1Type, Indexed: false}
-	arg2 := abi.Argument{Name: "topics", Type: arg2Type, Indexed: false}
-	arg3 := abi.Argument{Name: "data", Type: arg3Type, Indexed: false}
-
-	var args = abi.Arguments{arg1, arg2, arg3}
-
-	return &GetLogByTxHash{Args: args}, nil
 }
 
 func (c *GetLogByTxHash) ABIPack() ([]byte, error) {
