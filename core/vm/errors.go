@@ -43,6 +43,7 @@ var (
 	ErrInvalidCrossChainCallInputLength = errors.New("CrossChainCall:invalid CrossChainCallInputLength")
 	ErrDisableExternalCall              = errors.New("CrossChainCall:disable external_call module")
 	ErrExternalCallNoActive             = errors.New("CrossChainCall:external_call is not active")
+	ErrNoActiveClient                   = errors.New("CrossChainCall:no active external-call-client")
 	ErrUnsupportMethod                  = errors.New("unsupported method")
 
 	// errStopToken is an internal token indicating interpreter loop termination,

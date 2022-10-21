@@ -40,6 +40,7 @@ type Config struct {
 	ExtraEips []int // Additional EIPS that are to be enabled
 	IsJsonRpc bool  // Whether the call is in context of JsonRpc
 
+	IsStateSync        bool               // Define the execution environment of crossChainCall precompile contract
 	ExternalCallClient ExternalCallClient // This client is used to make external calls
 }
 

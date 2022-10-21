@@ -1298,10 +1298,10 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 	ctx := context.Background()
 	if bytes.Equal(input[0:4], getLogByTxHashId) {
 
-		client := env.evm.ExternalCallClient()
 		var list *CrossChainCallResults
 
-		if client == nil {
+		if env.evm.Config.IsStateSync {
+			// The flag of isStateSync is true means that the execution environment is the process of state-sync.
 			idx := env.evm.Interpreter().CallResultIdx()
 			if idx >= uint64(len(env.evm.Interpreter().CrossChainCallResults())) {
 				// unexpect error
@@ -1317,6 +1317,10 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 
 			return list.CallRes, list.GasUsed, nil
 		} else {
+			// The flag of isStateSync is false means that the execution environment is the process of consensus block generation.
+			if env.evm.ExternalCallClient() == nil {
+				return nil, 0, ErrNoActiveClient
+			}
 			chainId := new(big.Int).SetBytes(getData(input, 4, 32)).Uint64()
 			txHash := common.BytesToHash(getData(input, 4+32, 32))
 			logIdx := new(big.Int).SetBytes(getData(input, 4+64, 32)).Uint64()
