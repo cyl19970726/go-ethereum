@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/sstorage"
@@ -179,20 +178,6 @@ func (evm *EVM) EnableExternalCall() bool {
 		return true
 	}
 	return false
-}
-
-// SetCrossChainCallResultsByUncles decodes block.uncles to pre-set the result of the cross-chain-call
-func (evm *EVM) SetCrossChainCallResultsByUncles(uncles []*types.Header, tx *types.Transaction) {
-	if evm.ExternalCallClient() == nil {
-		if len(uncles) != 0 {
-			for _, u := range uncles {
-				if u.TxHash == tx.Hash() {
-					evm.Interpreter().SetCrossChainCallResults(u.Extra)
-					break
-				}
-			}
-		}
-	}
 }
 
 // Reset resets the EVM with a new transaction context.Reset
