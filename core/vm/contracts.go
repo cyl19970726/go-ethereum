@@ -192,7 +192,11 @@ func RunPrecompiledContract(env *PrecompiledContractCallEnv, p PrecompiledContra
 	if pw, ok := p.(PrecompiledContractToExternalCall); ok {
 		var actualGasUsed uint64
 		ret, actualGasUsed, err = pw.RunWith(env, input)
-		// gas refund
+		// guarantee that actualGasUsed is less than GasCost
+		if gasCost < actualGasUsed {
+			return nil, 0, ErrActualGasExceedChargedGas
+		}
+
 		suppliedGas += gasCost - actualGasUsed
 	} else if pw, ok := p.(PrecompiledContractWithEVM); ok {
 		ret, err = pw.RunWith(env, input)
