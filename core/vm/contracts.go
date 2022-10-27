@@ -1300,12 +1300,12 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 
 		var list *CrossChainCallResults
 
-		if env.evm.Config.IsStateSync {
+		if env.evm.Config.relayExternalCalls {
 			// The flag of isStateSync is true means that the execution environment is the process of state-sync.
 			idx := env.evm.Interpreter().CallResultIdx()
 			if idx >= uint64(len(env.evm.Interpreter().CrossChainCallResults())) {
 				// unexpect error
-				env.evm.setCrossChainCallUnExpectErr(ErrOutOfBoundsTracePtr)
+				env.evm.setCrossChainCallUnexpectErr(ErrOutOfBoundsTracePtr)
 				return nil, 0, ErrOutOfBoundsTracePtr
 			}
 			list = env.evm.Interpreter().CrossChainCallResults()[idx]
@@ -1336,11 +1336,11 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 			callres, expErr, unexpErr := GetExternalLog(ctx, env, chainId, txHash, logIdx, maxDataLen, confirms)
 
 			if unexpErr != nil {
-				env.evm.setCrossChainCallUnExpectErr(unexpErr)
+				env.evm.setCrossChainCallUnexpectErr(unexpErr)
 				return nil, 0, unexpErr
 			} else if expErr != nil {
 				// expect error uses the same error handling method as unexpect err
-				env.evm.setCrossChainCallUnExpectErr(expErr)
+				env.evm.setCrossChainCallUnexpectErr(expErr)
 				return nil, 0, expErr
 			} else {
 				// calculate actual cost of gas
@@ -1350,7 +1350,7 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 
 				resultValuePack, err := callres.ABIPack()
 				if err != nil {
-					env.evm.setCrossChainCallUnExpectErr(err)
+					env.evm.setCrossChainCallUnexpectErr(err)
 					return nil, 0, err
 				}
 				list = &CrossChainCallResults{
@@ -1367,7 +1367,7 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 
 	}
 
-	env.evm.setCrossChainCallUnExpectErr(ErrUnsupportMethod)
+	env.evm.setCrossChainCallUnexpectErr(ErrUnsupportMethod)
 	return nil, 0, ErrUnsupportMethod
 }
 

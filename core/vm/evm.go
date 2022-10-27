@@ -148,8 +148,8 @@ func NewEVM(blockCtx BlockContext, txCtx TxContext, statedb StateDB, chainConfig
 	return evm
 }
 
-// setCrossChainCallUnExpectErr record error that occur during cross-chain-call
-func (evm *EVM) setCrossChainCallUnExpectErr(err error) {
+// setCrossChainCallUnexpectErr record error that occur during cross-chain-call
+func (evm *EVM) setCrossChainCallUnexpectErr(err error) {
 	if evm.crossChainCallUnExpectErr == nil {
 		evm.crossChainCallUnExpectErr = err
 	}
