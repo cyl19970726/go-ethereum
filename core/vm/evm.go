@@ -167,14 +167,14 @@ func (evm *EVM) ExternalCallClient() ExternalCallClient {
 
 // SetCrossChainCallResults pre-sets the result of the cross-chain-call and is used when verifying the correctness of the transaction
 func (evm *EVM) SetCrossChainCallResults(result []byte) {
-	if evm.ExternalCallClient() == nil && evm.EnableExternalCall() && len(result) != 0 {
+	if evm.ExternalCallClient() == nil && evm.IsExternalCallEnabled() && len(result) != 0 {
 		evm.Interpreter().SetCrossChainCallResults(result)
 	}
 }
 
-// EnableExternalCall returns true if the external-call module is active, otherwise returns false
-func (evm *EVM) EnableExternalCall() bool {
-	if evm.ChainConfig().ExternalCall.EnableBlockNumber != nil && evm.Context.BlockNumber.Cmp(evm.ChainConfig().ExternalCall.EnableBlockNumber) != -1 {
+// IsExternalCallEnabled returns true if the external-call module is active, otherwise returns false
+func (evm *EVM) IsExternalCallEnabled() bool {
+	if evm.ChainConfig().ExternalCall != nil && evm.ChainConfig().ExternalCall.EnableBlockNumber != nil && evm.Context.BlockNumber.Cmp(evm.ChainConfig().ExternalCall.EnableBlockNumber) != -1 {
 		return true
 	}
 	return false

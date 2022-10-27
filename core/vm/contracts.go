@@ -1291,11 +1291,7 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 		return nil, 0, ErrInvalidCrossChainCallInputLength
 	}
 
-	if env.evm.ChainConfig().ExternalCall.EnableBlockNumber == nil {
-		return nil, 0, ErrDisableExternalCall
-	}
-
-	if env.evm.Context.BlockNumber.Cmp(env.evm.ChainConfig().ExternalCall.EnableBlockNumber) == -1 {
+	if !env.evm.IsExternalCallEnabled() {
 		return nil, 0, ErrExternalCallNoActive
 	}
 
@@ -1325,6 +1321,7 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 			if env.evm.ExternalCallClient() == nil {
 				return nil, 0, ErrNoActiveClient
 			}
+
 			chainId := new(big.Int).SetBytes(getData(input, 4, 32)).Uint64()
 			txHash := common.BytesToHash(getData(input, 4+32, 32))
 			logIdx := new(big.Int).SetBytes(getData(input, 4+64, 32)).Uint64()
@@ -1332,8 +1329,8 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 			confirms := new(big.Int).SetBytes(getData(input, 4+128, 32)).Uint64()
 
 			// Ensure that the number of confirmations meets the minimum requirement which is defined by chainConfig
-			if confirms < env.evm.ChainConfig().ExternalCall.ConfirmsNether {
-				confirms = env.evm.ChainConfig().ExternalCall.ConfirmsNether
+			if confirms < env.evm.ChainConfig().ExternalCall.MinimumConfirms {
+				confirms = env.evm.ChainConfig().ExternalCall.MinimumConfirms
 			}
 
 			callres, expErr, unexpErr := GetExternalLog(ctx, env, chainId, txHash, logIdx, maxDataLen, confirms)
