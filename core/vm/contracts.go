@@ -1230,12 +1230,13 @@ type crossChainCall struct {
 }
 
 const CrossChainCallInputLength = 164
+const ErrGasCost = 20000
 
 // RequiredGas is the maximum gas consumption that will calculate the cross_chain_call
 func (c *crossChainCall) RequiredGas(input []byte) uint64 {
 	if len(input) != CrossChainCallInputLength {
-		// change a high gas when an error occurs to avoid DOS attack
-		return 20000
+		// charge a high gas when an error occurs to avoid DOS attack
+		return ErrGasCost
 	}
 
 	maxDataLen := new(big.Int).SetBytes(getData(input, 4+3*32, 32)).Uint64()
@@ -1243,10 +1244,35 @@ func (c *crossChainCall) RequiredGas(input []byte) uint64 {
 
 	var callResultGas uint64 = (32 + 32*7) * params.ExternalCallByteGasCost // pay address and topics
 	if maxDataLen%32 != 0 {
-		maxDataLen = maxDataLen + (32 - maxDataLen%32)
+		var maxDataLenTmp uint64
+		maxDataLenTmp = maxDataLen + (32 - maxDataLen%32)
+		if maxDataLenTmp < maxDataLen {
+			// overflow
+			// charge a high gas when an error occurs to avoid DOS attack
+			return ErrGasCost
+		}
+		maxDataLen = maxDataLenTmp
 	}
+
 	callResultGas += maxDataLen * params.ExternalCallByteGasCost
-	gasUsed := callResultGas + inputGas + params.ExternalCallGas
+	if callResultGas/maxDataLen != params.ExternalCallByteGasCost {
+		// overflow
+		// charge a high gas when an error occurs to avoid DOS attack
+		return ErrGasCost
+	}
+	gasUsed := callResultGas + inputGas
+	if gasUsed < callResultGas+inputGas {
+		// overflow
+		// charge a high gas when an error occurs to avoid DOS attack
+		return ErrGasCost
+	}
+
+	gasUsedSum := gasUsed + params.ExternalCallGas
+	if gasUsedSum < gasUsed+params.ExternalCallGas {
+		// overflow
+		// charge a high gas when an error occurs to avoid DOS attack
+		return ErrGasCost
+	}
 	/*
 		The gas calculation formula is as follows：
 		gas_overpay =  ExternalCallByteGasCost * (address_len + topics_len + data_len) + ExternalCallGas
