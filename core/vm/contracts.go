@@ -315,9 +315,10 @@ var (
 // modexpMultComplexity implements bigModexp multComplexity formula, as defined in EIP-198
 //
 // def mult_complexity(x):
-//    if x <= 64: return x ** 2
-//    elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
-//    else: return x ** 2 // 16 + 480 * x - 199680
+//
+//	if x <= 64: return x ** 2
+//	elif x <= 1024: return x ** 2 // 4 + 96 * x - 3072
+//	else: return x ** 2 // 16 + 480 * x - 199680
 //
 // where is x is max(length_of_MODULUS, length_of_BASE)
 func modexpMultComplexity(x *big.Int) *big.Int {
@@ -1327,7 +1328,7 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 		var list *CrossChainCallResults
 
 		if env.evm.Config.relayExternalCalls {
-			// The flag of isStateSync is true means that the execution environment is the process of state-sync.
+			// The flag of relayExternalCalls is true means that the node will preset the external-call-result received through network
 			idx := env.evm.Interpreter().CallResultIdx()
 			if idx >= uint64(len(env.evm.Interpreter().CrossChainCallResults())) {
 				// unexpect error
@@ -1343,8 +1344,9 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 
 			return list.CallRes, list.GasUsed, nil
 		} else {
-			// The flag of isStateSync is false means that the execution environment is the process of consensus block generation.
+			// The flag of relayExternalCalls is false means that the node will produce the external-call-result by itself
 			if env.evm.ExternalCallClient() == nil {
+				env.evm.setCrossChainCallUnexpectErr(ErrNoActiveClient)
 				return nil, 0, ErrNoActiveClient
 			}
 
@@ -1356,7 +1358,8 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 
 			// Ensure that the number of confirmations meets the minimum requirement which is defined by chainConfig
 			if confirms < env.evm.ChainConfig().ExternalCall.MinimumConfirms {
-				confirms = env.evm.ChainConfig().ExternalCall.MinimumConfirms
+				env.evm.setCrossChainCallUnexpectErr(ErrUserConfirmsNoEnough)
+				return nil, 0, ErrUserConfirmsNoEnough
 			}
 
 			callres, expErr, unexpErr := GetExternalLog(ctx, env, chainId, txHash, logIdx, maxDataLen, confirms)
