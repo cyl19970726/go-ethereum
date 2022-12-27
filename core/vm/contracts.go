@@ -58,7 +58,7 @@ type PrecompiledContractWithEVM interface {
 }
 
 type PrecompiledContractToExternalCall interface {
-	RunWith(env *PrecompiledContractCallEnv, input []byte) ([]byte, uint64, error)
+	RunWith(env *PrecompiledContractCallEnv, input []byte, prepayGas uint64) ([]byte, uint64, error)
 }
 
 // PrecompiledContractsHomestead contains the default set of pre-compiled Ethereum
@@ -191,12 +191,7 @@ func RunPrecompiledContract(env *PrecompiledContractCallEnv, p PrecompiledContra
 	suppliedGas -= gasCost
 	if pw, ok := p.(PrecompiledContractToExternalCall); ok {
 		var actualGasUsed uint64
-		ret, actualGasUsed, err = pw.RunWith(env, input)
-		// guarantee that actualGasUsed is less than GasCost
-		if gasCost < actualGasUsed {
-			return nil, 0, ErrActualGasExceedChargedGas
-		}
-
+		ret, actualGasUsed, err = pw.RunWith(env, input, gasCost)
 		suppliedGas += gasCost - actualGasUsed
 	} else if pw, ok := p.(PrecompiledContractWithEVM); ok {
 		ret, err = pw.RunWith(env, input)
@@ -1313,7 +1308,7 @@ func (c *crossChainCall) Run(input []byte) ([]byte, error) {
 	return nil, ErrUnsupportMethod
 }
 
-func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) ([]byte, uint64, error) {
+func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte, prePayGas uint64) ([]byte, uint64, error) {
 	if len(input) != CrossChainCallInputLength {
 		return nil, 0, ErrInvalidCrossChainCallInputLength
 	}
@@ -1342,7 +1337,6 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 				return list.CallRes, list.GasUsed, ErrExecutionReverted
 			}
 
-			return list.CallRes, list.GasUsed, nil
 		} else {
 			// The flag of relayExternalCalls is false means that the node will produce the external-call-result by itself
 			if env.evm.ExternalCallClient() == nil {
@@ -1388,10 +1382,16 @@ func (c *crossChainCall) RunWith(env *PrecompiledContractCallEnv, input []byte) 
 					GasUsed: actualGasUsed,
 				}
 				env.evm.Interpreter().AppendCrossChainCallResults(list)
-
-				return list.CallRes, list.GasUsed, nil
 			}
 
+		}
+
+		if list.GasUsed > prePayGas {
+			// expect error
+			env.evm.setCrossChainCallUnexpectErr(ErrActualGasExceedChargedGas)
+			return list.CallRes, list.GasUsed, ErrActualGasExceedChargedGas
+		} else {
+			return list.CallRes, list.GasUsed, nil
 		}
 
 	}
