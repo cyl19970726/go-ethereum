@@ -112,7 +112,9 @@ type queue struct {
 	mode SyncMode // Synchronisation mode to decide on the block parts to schedule for fetching
 
 	// Headers are "special", they download in batches, supported by a skeleton chain
-	headerHead      common.Hash                    // Hash of the last queued header to verify order
+	headerHead common.Hash // Hash of the last queued header to verify order
+
+	// height => header
 	headerTaskPool  map[uint64]*types.Header       // Pending header retrieval tasks, mapping starting indexes to skeleton headers
 	headerTaskQueue *prque.Prque                   // Priority queue of the skeleton indexes to fetch the filling headers for
 	headerPeerMiss  map[string]map[uint64]struct{} // Set of per-peer header batches known to be unavailable
@@ -247,6 +249,7 @@ func (q *queue) Idle() bool {
 
 // ScheduleSkeleton adds a batch of header retrieval tasks to the queue to fill
 // up an already retrieved header skeleton.
+// @from : the same ancestor + 1
 func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 	q.lock.Lock()
 	defer q.lock.Unlock()
@@ -419,6 +422,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 
 	// Short circuit if the peer's already downloading something (sanity check to
 	// not corrupt state)
+	// 确保这个 peer 目前没有被分配任何 active 的 peer 请求
 	if _, ok := q.headerPendPool[p.id]; ok {
 		return nil
 	}
@@ -427,6 +431,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 	for send == 0 && !q.headerTaskQueue.Empty() {
 		from, _ := q.headerTaskQueue.Pop()
 		if q.headerPeerMiss[p.id] != nil {
+			// 好奇什么时候把 q.headerPeerMiss[p.id][from.(uint64)] 设置进去的
 			if _, ok := q.headerPeerMiss[p.id][from.(uint64)]; ok {
 				skip = append(skip, from.(uint64))
 				continue
@@ -436,6 +441,7 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 	}
 	// Merge all the skipped batches back
 	for _, from := range skip {
+		// 这里采用 将skip Push回去的原因: 避免并发的冲突
 		q.headerTaskQueue.Push(from, -int64(from))
 	}
 	// Assemble and return the block download request
@@ -447,6 +453,8 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 		From: send,
 		Time: time.Now(),
 	}
+
+	// 加入到正在请求的池子
 	q.headerPendPool[p.id] = request
 	return request
 }
@@ -480,9 +488,10 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 // to access the queue, so they already need a lock anyway.
 //
 // Returns:
-//   item     - the fetchRequest
-//   progress - whether any progress was made
-//   throttle - if the caller should throttle for a while
+//
+//	item     - the fetchRequest
+//	progress - whether any progress was made
+//	throttle - if the caller should throttle for a while
 func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
 	// Short circuit if the pool has been depleted, or if the peer's already
@@ -682,6 +691,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 	// Ensure headers can be mapped onto the skeleton chain
 	target := q.headerTaskPool[request.From].Hash()
 
+	// 一次性拿一段骨架的所有区块头
 	accepted := len(headers) == MaxHeaderFetch
 	if accepted {
 		if headers[0].Number.Uint64() != request.From {
@@ -744,6 +754,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, hashes []comm
 		copy(processHashes, q.headerHashes[q.headerProced:q.headerProced+ready])
 
 		select {
+		// 传入的参数是 q.headerProcCh
 		case headerProcCh <- &headerTask{
 			headers: processHeaders,
 			hashes:  processHashes,

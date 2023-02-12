@@ -78,8 +78,11 @@ type typedQueue interface {
 // or timeouts.
 func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	// Create a delivery channel to accept responses from all peers
+
+	// 1. 创建接收请求结果的 channel
 	responses := make(chan *eth.Response)
 
+	// 2. pending：track 当前发送给不同peer的 eth.Request
 	// Track the currently active requests and their timeout order
 	pending := make(map[string]*eth.Request)
 	defer func() {
@@ -90,7 +93,9 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			req.Close()
 		}
 	}()
+	// 3. 假设: 存储 request ==> timeouts index
 	ordering := make(map[*eth.Request]int)
+	// 4. 存储每个request 的 timeout [堆排序的队列]
 	timeouts := prque.New(func(data interface{}, index int) {
 		ordering[data.(*eth.Request)] = index
 	})
@@ -106,6 +111,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	// all trace of a timed out request is not good. We also can't just cancel
 	// the pending request altogether as that would prevent a late response from
 	// being delivered, thus never unblocking the peer.
+	// 4. 跟踪已经 timeout 且还没有回复的 request，因为我们想知道这个ethRequest对等节点的网络状况
 	stales := make(map[string]*eth.Request)
 	defer func() {
 		// Abort all requests on sync cycle cancellation. The requests may still
@@ -118,6 +124,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 	// Subscribe to peer lifecycle events to schedule tasks to new joiners and
 	// reschedule tasks upon disconnections. We don't care which event happened
 	// for simplicity, so just use a single channel.
+	// 5. 通过 peer lifecycle events 来调整任务分配（不关心发生了什么event）
 	peering := make(chan *peeringEvent, 64) // arbitrary buffer, just some burst protection
 
 	peeringSub := d.peers.SubscribeEvents(peering)
@@ -136,17 +143,25 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				return nil
 			}
 		} else {
+			// 进来这里代表 queue.pending()!=0, 意味着结下来要将queue里面的任务拿出来执行，执行就是选择一个节点发送 eth.Request
 			// Send a download request to all idle peers, until throttled
 			var (
+				// 如果这个节点既没有在pending和stale中，会被加入到idles里
 				idles []*peerConnection
-				caps  []int
+				// 猜测：能在一个RTT内返回的内容-->预估throughout-->代表跟一个节点连接的网络情况，这个值越高代表这个连接的状况越好
+				caps []int
 			)
+
 			for _, peer := range d.peers.AllPeers() {
+				// pending 代表这个节点有正在执行的ethRequest
+				// stales 代表这个节点之前有Request已经timeout, 但是依然还没收到response,可能需要进一步跟踪这个节点的状态【可以选择跟这个节点断开链接】
 				pending, stale := pending[peer.id], stales[peer.id]
 				if pending == nil && stale == nil {
+					// 只有 pending 和 stale 都是nil的时候才表明可以给这个peer分配任务
 					idles = append(idles, peer)
 					caps = append(caps, queue.capacity(peer, time.Second))
 				} else if stale != nil {
+					// 代表这个节点之前有Request已经timeout, 但是依然还没收到response,可能需要进一步跟踪这个节点的状态【可以选择跟这个节点断开链接，如果一直没有收到回复-->这个节点可能已经宕机或者overload】
 					if waited := time.Since(stale.Sent); waited > timeoutGracePeriod {
 						// Request has been in flight longer than the grace period
 						// permitted it, consider the peer malicious attempting to
@@ -156,6 +171,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					}
 				}
 			}
+			// 根据每个节点的 caps 对节点进行排序，让网络状况好的节点排在前面
 			sort.Sort(&peerCapacitySort{idles, caps})
 
 			var (
@@ -175,6 +191,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				// Reserve a chunk of fetches for a peer. A nil can mean either that
 				// no more headers are available, or that the peer is known not to
 				// have them.
+				// 构造request, 并且将request 加入到 q.headerPendPool[p.id] = request
 				request, progress, throttle := queue.reserve(peer, queue.capacity(peer, d.peers.rates.TargetRoundTrip()))
 				if progress {
 					progressed = true
@@ -187,6 +204,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 					continue
 				}
 				// Fetch the chunk and make sure any errors return the hashes to the queue
+				// 向对应的peer 发送已经构造好的request（实际上queue在这个函数内，会决定对这个peer请求的区块头的from的具体值）
 				req, err := queue.request(peer, request, responses)
 				if err != nil {
 					// Sending the request failed, which generally means the peer
@@ -201,8 +219,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 
 				ttl := d.peers.rates.TargetTimeout()
 				ordering[req] = timeouts.Size()
-
-				timeouts.Push(req, -time.Now().Add(ttl).UnixNano())
+				timeouts.Push(req, -time.Now().Add(ttl).UnixNano()) // heap的属性是最小的值在最上面(第一个被pop)
 				if timeouts.Size() == 1 {
 					timeout.Reset(ttl)
 				}
@@ -226,6 +243,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			// checked for potential assignment or reassignment
 			peerid := event.peer.id
 
+			// 新加入节点的处理
 			if event.join {
 				// Sanity check the internal state; this can be dropped later
 				if _, ok := pending[peerid]; ok {
@@ -237,9 +255,12 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				// Loop back to the entry point for task assignment
 				continue
 			}
+
+			// 节点离开的处理
 			// A peer left, any existing requests need to be untracked, pending
 			// tasks returned and possible reassignment checked
 			if req, ok := pending[peerid]; ok {
+				// 取消q.headerPendPool中正在执行的request ==>  重新把这个request对应的head加入回到q.headerTaskQueue
 				queue.unreserve(peerid) // TODO(karalabe): This needs a non-expiration method
 				delete(pending, peerid)
 				req.Close()
@@ -252,7 +273,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 						}
 						if timeouts.Size() > 0 {
 							_, exp := timeouts.Peek()
-							timeout.Reset(time.Until(time.Unix(0, -exp)))
+							timeout.Reset(time.Until(time.Unix(0, -exp))) // -exp ==>负负得正
 						}
 					}
 					delete(ordering, req)
@@ -284,6 +305,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			stales[req.Peer] = req
 			delete(ordering, req)
 
+			// timeout 的核心在这里，先pop 再 peek
 			timeouts.Pop()
 			if timeouts.Size() > 0 {
 				_, exp := timeouts.Peek()
@@ -291,7 +313,8 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 			}
 			// New timeout potentially set if there are more requests pending,
 			// reschedule the failed one to a free peer
-			fails := queue.unreserve(req.Peer)
+			// 取消q.headerPendPool中正在执行的request ==>  重新把这个request对应的head加入回到q.headerTaskQueue
+			fails := queue.unreserve(req.Peer) // 失败的区块头数量
 
 			// Finally, update the peer's retrieval capacity, or if it's already
 			// below the minimum allowance, drop the peer. If a lot of retrieval
@@ -313,11 +336,14 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 				continue
 			}
 			if fails > 2 {
+				// 在 queue 中记录这个节点能在单位时间内回复的 items 为 0；相当于把该节点拉进黑名单
 				queue.updateCapacity(peer, 0, 0)
 			} else {
+				// 跟这个节点断开链接
 				d.dropPeer(peer.id)
 
 				// If this peer was the master peer, abort sync immediately
+				// master peer 意味着这个peer是给骨架的那个peer
 				d.cancelLock.RLock()
 				master := peer.id == d.cancelPeer
 				d.cancelLock.RUnlock()

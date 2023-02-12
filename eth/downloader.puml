@@ -1,0 +1,401 @@
+@startuml
+namespace downloader {
+    interface BlockChain  {
+        + HasBlock( common.Hash,  uint64) bool
+        + HasFastBlock( common.Hash,  uint64) bool
+        + GetBlockByHash( common.Hash) *types.Block
+        + CurrentBlock() *types.Block
+        + CurrentFastBlock() *types.Block
+        + SnapSyncCommitHead( common.Hash) error
+        + InsertChain( types.Blocks) (int, error)
+        + InsertReceiptChain( types.Blocks,  []types.Receipts,  uint64) (int, error)
+        + Snapshots() *snapshot.Tree
+
+    }
+    class DoneEvent << (S,Aquamarine) >> {
+        + Latest *types.Header
+
+    }
+    class Downloader << (S,Aquamarine) >> {
+        - mode uint32
+        - mux *event.TypeMux
+        - checkpoint uint64
+        - genesis uint64
+        - queue *queue
+        - peers *peerSet
+        - stateDB ethdb.Database
+        - syncStatsChainOrigin uint64
+        - syncStatsChainHeight uint64
+        - syncStatsLock sync.RWMutex
+        - lightchain LightChain
+        - blockchain BlockChain
+        - dropPeer peerDropFn
+        - synchroniseMock <font color=blue>func</font>(string, common.Hash) error
+        - synchronising int32
+        - notified int32
+        - committed int32
+        - ancientLimit uint64
+        - headerProcCh <font color=blue>chan</font> *headerTask
+        - pivotHeader *types.Header
+        - pivotLock sync.RWMutex
+        - snapSync bool
+        - stateSyncStart <font color=blue>chan</font> *stateSync
+        - cancelPeer string
+        - cancelCh <font color=blue>chan</font> <font color=blue>struct</font>{}
+        - cancelLock sync.RWMutex
+        - cancelWg sync.WaitGroup
+        - quitCh <font color=blue>chan</font> <font color=blue>struct</font>{}
+        - quitLock sync.Mutex
+        - syncInitHook <font color=blue>func</font>(uint64, uint64) 
+        - bodyFetchHook <font color=blue>func</font>([]*types.Header) 
+        - receiptFetchHook <font color=blue>func</font>([]*types.Header) 
+        - chainInsertHook <font color=blue>func</font>([]*fetchResult) 
+
+        + SnapSyncer *snap.Syncer
+
+        - synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error
+        - getMode() SyncMode
+        - syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) error
+        - spawnSync(fetchers []<font color=blue>func</font>() error) error
+        - cancel() 
+        - fetchHead(p *peerConnection) (*types.Header, *types.Header, error)
+        - findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error)
+        - findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight uint64, localHeight uint64, floor int64) (uint64, error)
+        - findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (uint64, error)
+        - fetchHeaders(p *peerConnection, from uint64, head uint64) error
+        - fillHeaderSkeleton(from uint64, skeleton []*types.Header) ([]*types.Header, []common.Hash, int, error)
+        - fetchBodies(from uint64) error
+        - fetchReceipts(from uint64) error
+        - processHeaders(origin uint64, td *big.Int) error
+        - processFullSyncContent() error
+        - importBlockResults(results []*fetchResult) error
+        - processSnapSyncContent() error
+        - commitSnapSyncData(results []*fetchResult, stateSync *stateSync) error
+        - commitPivotBlock(result *fetchResult) error
+        - fetchHeadersByHash(p *peerConnection, hash common.Hash, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)
+        - fetchHeadersByNumber(p *peerConnection, number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)
+        - concurrentFetch(queue typedQueue) error
+        - syncState(root common.Hash) *stateSync
+        - stateFetcher() 
+        - runStateSync(s *stateSync) *stateSync
+
+        + Progress() ethereum.SyncProgress
+        + Synchronising() bool
+        + RegisterPeer(id string, version uint, peer Peer) error
+        + RegisterLightPeer(id string, version uint, peer LightPeer) error
+        + UnregisterPeer(id string) error
+        + Synchronise(id string, head common.Hash, td *big.Int, mode SyncMode) error
+        + Cancel() 
+        + Terminate() 
+        + DeliverSnapPacket(peer *snap.Peer, packet snap.Packet) error
+
+    }
+    class FailedEvent << (S,Aquamarine) >> {
+        + Err error
+
+    }
+    interface LightChain  {
+        + HasHeader( common.Hash,  uint64) bool
+        + GetHeaderByHash( common.Hash) *types.Header
+        + CurrentHeader() *types.Header
+        + GetTd( common.Hash,  uint64) *big.Int
+        + InsertHeaderChain( []*types.Header,  int) (int, error)
+        + SetHead( uint64) error
+
+    }
+    interface LightPeer  {
+        + Head() (common.Hash, *big.Int)
+        + RequestHeadersByHash( common.Hash,  int,  int,  bool,  <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        + RequestHeadersByNumber( uint64,  int,  int,  bool,  <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+
+    }
+    interface Peer  {
+        + RequestBodies( []common.Hash,  <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        + RequestReceipts( []common.Hash,  <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+
+    }
+    class PublicDownloaderAPI << (S,Aquamarine) >> {
+        - d *Downloader
+        - mux *event.TypeMux
+        - installSyncSubscription <font color=blue>chan</font> <font color=blue>chan</font> <font color=blue>interface</font>{}
+        - uninstallSyncSubscription <font color=blue>chan</font> *uninstallSyncSubscriptionRequest
+
+        - eventLoop() 
+
+        + Syncing(ctx context.Context) (*rpc.Subscription, error)
+        + SubscribeSyncStatus(status <font color=blue>chan</font> <font color=blue>interface</font>{}) *SyncStatusSubscription
+
+    }
+    class StartEvent << (S,Aquamarine) >> {
+    }
+    class SyncMode << (S,Aquamarine) >> {
+        + IsValid() bool
+        + String() string
+        + MarshalText() ([]byte, error)
+        + UnmarshalText(text []byte) error
+
+    }
+    class SyncStatusSubscription << (S,Aquamarine) >> {
+        - api *PublicDownloaderAPI
+        - c <font color=blue>chan</font> <font color=blue>interface</font>{}
+        - unsubOnce sync.Once
+
+        + Unsubscribe() 
+
+    }
+    class SyncingResult << (S,Aquamarine) >> {
+        + Syncing bool
+        + Status ethereum.SyncProgress
+
+    }
+    class bodyQueue << (S,Aquamarine) >> {
+        - waker() <font color=blue>chan</font> bool
+        - pending() int
+        - capacity(peer *peerConnection, rtt time.Duration) int
+        - updateCapacity(peer *peerConnection, items int, span time.Duration) 
+        - reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool)
+        - unreserve(peer string) int
+        - request(peer *peerConnection, req *fetchRequest, resCh <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        - deliver(peer *peerConnection, packet *eth.Response) (int, error)
+
+    }
+    class downloader.SyncMode << (T, #FF7700) >>  {
+    }
+    class downloader.bodyQueue << (T, #FF7700) >>  {
+    }
+    class downloader.headerQueue << (T, #FF7700) >>  {
+    }
+    class downloader.peerDropFn << (T, #FF7700) >>  {
+    }
+    class downloader.receiptQueue << (T, #FF7700) >>  {
+    }
+    class fetchRequest << (S,Aquamarine) >> {
+        + Peer *peerConnection
+        + From uint64
+        + Headers []*types.Header
+        + Time time.Time
+
+    }
+    class fetchResult << (S,Aquamarine) >> {
+        - pending int32
+
+        + Header *types.Header
+        + Uncles []*types.Header
+        + Transactions types.Transactions
+        + Receipts types.Receipts
+
+        + SetBodyDone() 
+        + AllDone() bool
+        + SetReceiptsDone() 
+        + Done(kind uint) bool
+
+    }
+    class headerQueue << (S,Aquamarine) >> {
+        - waker() <font color=blue>chan</font> bool
+        - pending() int
+        - capacity(peer *peerConnection, rtt time.Duration) int
+        - updateCapacity(peer *peerConnection, items int, span time.Duration) 
+        - reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool)
+        - unreserve(peer string) int
+        - request(peer *peerConnection, req *fetchRequest, resCh <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        - deliver(peer *peerConnection, packet *eth.Response) (int, error)
+
+    }
+    class headerTask << (S,Aquamarine) >> {
+        - headers []*types.Header
+        - hashes []common.Hash
+
+    }
+    class lightPeerWrapper << (S,Aquamarine) >> {
+        - peer LightPeer
+
+        + Head() (common.Hash, *big.Int)
+        + RequestHeadersByHash(h common.Hash, amount int, skip int, reverse bool, sink <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        + RequestHeadersByNumber(i uint64, amount int, skip int, reverse bool, sink <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        + RequestBodies( []common.Hash,  <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        + RequestReceipts( []common.Hash,  <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+
+    }
+    class peerCapacitySort << (S,Aquamarine) >> {
+        - p []*peerConnection
+        - tp []int
+
+        + Len() int
+        + Less(i int, j int) bool
+        + Swap(i int, j int) 
+
+    }
+    class peerConnection << (S,Aquamarine) >> {
+        - id string
+        - rates *msgrate.Tracker
+        - lacking <font color=blue>map</font>[common.Hash]<font color=blue>struct</font>{}
+        - peer Peer
+        - version uint
+        - log log.Logger
+        - lock sync.RWMutex
+
+        + Reset() 
+        + UpdateHeaderRate(delivered int, elapsed time.Duration) 
+        + UpdateBodyRate(delivered int, elapsed time.Duration) 
+        + UpdateReceiptRate(delivered int, elapsed time.Duration) 
+        + HeaderCapacity(targetRTT time.Duration) int
+        + BodyCapacity(targetRTT time.Duration) int
+        + ReceiptCapacity(targetRTT time.Duration) int
+        + MarkLacking(hash common.Hash) 
+        + Lacks(hash common.Hash) bool
+
+    }
+    class peerSet << (S,Aquamarine) >> {
+        - peers <font color=blue>map</font>[string]*peerConnection
+        - rates *msgrate.Trackers
+        - events event.Feed
+        - lock sync.RWMutex
+
+        + SubscribeEvents(ch <font color=blue>chan</font> *peeringEvent) event.Subscription
+        + Reset() 
+        + Register(p *peerConnection) error
+        + Unregister(id string) error
+        + Peer(id string) *peerConnection
+        + Len() int
+        + AllPeers() []*peerConnection
+
+    }
+    class peeringEvent << (S,Aquamarine) >> {
+        - peer *peerConnection
+        - join bool
+
+    }
+    class queue << (S,Aquamarine) >> {
+        - mode SyncMode
+        - headerHead common.Hash
+        - headerTaskPool <font color=blue>map</font>[uint64]*types.Header
+        - headerTaskQueue *prque.Prque
+        - headerPeerMiss <font color=blue>map</font>[string]<font color=blue>map</font>[uint64]<font color=blue>struct</font>{}
+        - headerPendPool <font color=blue>map</font>[string]*fetchRequest
+        - headerResults []*types.Header
+        - headerHashes []common.Hash
+        - headerProced int
+        - headerOffset uint64
+        - headerContCh <font color=blue>chan</font> bool
+        - blockTaskPool <font color=blue>map</font>[common.Hash]*types.Header
+        - blockTaskQueue *prque.Prque
+        - blockPendPool <font color=blue>map</font>[string]*fetchRequest
+        - blockWakeCh <font color=blue>chan</font> bool
+        - receiptTaskPool <font color=blue>map</font>[common.Hash]*types.Header
+        - receiptTaskQueue *prque.Prque
+        - receiptPendPool <font color=blue>map</font>[string]*fetchRequest
+        - receiptWakeCh <font color=blue>chan</font> bool
+        - resultCache *resultStore
+        - resultSize common.StorageSize
+        - lock *sync.RWMutex
+        - active *sync.Cond
+        - closed bool
+        - lastStatLog time.Time
+
+        - stats() []<font color=blue>interface</font>{}
+        - reserveHeaders(p *peerConnection, count int, taskPool <font color=blue>map</font>[common.Hash]*types.Header, taskQueue *prque.Prque, pendPool <font color=blue>map</font>[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool)
+        - expire(peer string, pendPool <font color=blue>map</font>[string]*fetchRequest, taskQueue *prque.Prque) int
+        - deliver(id string, taskPool <font color=blue>map</font>[common.Hash]*types.Header, taskQueue *prque.Prque, pendPool <font color=blue>map</font>[string]*fetchRequest, reqTimer metrics.Timer, resInMeter metrics.Meter, resDropMeter metrics.Meter, results int, validate <font color=blue>func</font>(int, *types.Header) error, reconstruct <font color=blue>func</font>(int, *fetchResult) ) (int, error)
+
+        + Reset(blockCacheLimit int, thresholdInitialSize int) 
+        + Close() 
+        + PendingHeaders() int
+        + PendingBodies() int
+        + PendingReceipts() int
+        + InFlightBlocks() bool
+        + InFlightReceipts() bool
+        + Idle() bool
+        + ScheduleSkeleton(from uint64, skeleton []*types.Header) 
+        + RetrieveHeaders() ([]*types.Header, []common.Hash, int)
+        + Schedule(headers []*types.Header, hashes []common.Hash, from uint64) []*types.Header
+        + Results(block bool) []*fetchResult
+        + Stats() []<font color=blue>interface</font>{}
+        + ReserveHeaders(p *peerConnection, count int) *fetchRequest
+        + ReserveBodies(p *peerConnection, count int) (*fetchRequest, bool, bool)
+        + ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bool, bool)
+        + Revoke(peerID string) 
+        + ExpireHeaders(peer string) int
+        + ExpireBodies(peer string) int
+        + ExpireReceipts(peer string) int
+        + DeliverHeaders(id string, headers []*types.Header, hashes []common.Hash, headerProcCh <font color=blue>chan</font> *headerTask) (int, error)
+        + DeliverBodies(id string, txLists [][]*types.Transaction, txListHashes []common.Hash, uncleLists [][]*types.Header, uncleListHashes []common.Hash) (int, error)
+        + DeliverReceipts(id string, receiptList [][]*types.Receipt, receiptListHashes []common.Hash) (int, error)
+        + Prepare(offset uint64, mode SyncMode) 
+
+    }
+    class receiptQueue << (S,Aquamarine) >> {
+        - waker() <font color=blue>chan</font> bool
+        - pending() int
+        - capacity(peer *peerConnection, rtt time.Duration) int
+        - updateCapacity(peer *peerConnection, items int, span time.Duration) 
+        - reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool)
+        - unreserve(peer string) int
+        - request(peer *peerConnection, req *fetchRequest, resCh <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        - deliver(peer *peerConnection, packet *eth.Response) (int, error)
+
+    }
+    class resultStore << (S,Aquamarine) >> {
+        - items []*fetchResult
+        - resultOffset uint64
+        - indexIncomplete int32
+        - throttleThreshold uint64
+        - lock sync.RWMutex
+
+        - getFetchResult(headerNumber uint64) (*fetchResult, int, bool, bool, error)
+        - countCompleted() int
+
+        + SetThrottleThreshold(threshold uint64) uint64
+        + AddFetch(header *types.Header, fastSync bool) (bool, bool, *fetchResult, error)
+        + GetDeliverySlot(headerNumber uint64) (*fetchResult, bool, error)
+        + HasCompletedItems() bool
+        + GetCompleted(limit int) []*fetchResult
+        + Prepare(offset uint64) 
+
+    }
+    class stateSync << (S,Aquamarine) >> {
+        - d *Downloader
+        - root common.Hash
+        - started <font color=blue>chan</font> <font color=blue>struct</font>{}
+        - cancel <font color=blue>chan</font> <font color=blue>struct</font>{}
+        - cancelOnce sync.Once
+        - done <font color=blue>chan</font> <font color=blue>struct</font>{}
+        - err error
+
+        - run() 
+
+        + Wait() error
+        + Cancel() error
+
+    }
+    interface typedQueue  {
+        - waker() <font color=blue>chan</font> bool
+        - pending() int
+        - capacity(peer *peerConnection, rtt time.Duration) int
+        - updateCapacity(peer *peerConnection, items int, elapsed time.Duration) 
+        - reserve(peer *peerConnection, items int) (*fetchRequest, bool, bool)
+        - unreserve(peer string) int
+        - request(peer *peerConnection, req *fetchRequest, resCh <font color=blue>chan</font> *eth.Response) (*eth.Request, error)
+        - deliver(peer *peerConnection, packet *eth.Response) (int, error)
+
+    }
+    class uninstallSyncSubscriptionRequest << (S,Aquamarine) >> {
+        - c <font color=blue>chan</font> <font color=blue>interface</font>{}
+        - uninstalled <font color=blue>chan</font> <font color=blue>interface</font>{}
+
+    }
+}
+"downloader.LightChain" *-- "downloader.BlockChain"
+"downloader.LightPeer" *-- "downloader.Peer"
+
+"downloader.typedQueue" <|-- "downloader.bodyQueue"
+"downloader.typedQueue" <|-- "downloader.headerQueue"
+"downloader.LightPeer" <|-- "downloader.lightPeerWrapper"
+"downloader.Peer" <|-- "downloader.lightPeerWrapper"
+"downloader.typedQueue" <|-- "downloader.receiptQueue"
+
+"__builtin__.uint32" #.. "downloader.SyncMode"
+"downloader.<font color=blue>func</font>(string) " #.. "downloader.peerDropFn"
+"downloader.Downloader" #.. "downloader.bodyQueue"
+"downloader.Downloader" #.. "downloader.headerQueue"
+"downloader.Downloader" #.. "downloader.receiptQueue"
+@enduml

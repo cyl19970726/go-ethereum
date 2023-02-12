@@ -1,0 +1,466 @@
+@startuml
+namespace js {
+    class contractWrapper << (S,Aquamarine) >> {
+        - contract *vm.Contract
+
+        - pushObject(vm *duktape.Context) 
+
+    }
+    class dbWrapper << (S,Aquamarine) >> {
+        - db vm.StateDB
+
+        - pushObject(vm *duktape.Context) 
+
+    }
+    class frame << (S,Aquamarine) >> {
+        - typ *string
+        - from *common.Address
+        - to *common.Address
+        - input []byte
+        - gas *uint
+        - value *big.Int
+
+        - pushObject(vm *duktape.Context) 
+
+    }
+    class frameResult << (S,Aquamarine) >> {
+        - gasUsed *uint
+        - output []byte
+        - errorValue *string
+
+        - pushObject(vm *duktape.Context) 
+
+    }
+    class jsTracer << (S,Aquamarine) >> {
+        - vm *duktape.Context
+        - env *vm.EVM
+        - tracerObject int
+        - stateObject int
+        - opWrapper *opWrapper
+        - stackWrapper *stackWrapper
+        - memoryWrapper *memoryWrapper
+        - contractWrapper *contractWrapper
+        - dbWrapper *dbWrapper
+        - pcValue *uint
+        - gasValue *uint
+        - costValue *uint
+        - depthValue *uint
+        - errorValue *string
+        - refundValue *uint
+        - frame *frame
+        - frameResult *frameResult
+        - ctx <font color=blue>map</font>[string]<font color=blue>interface</font>{}
+        - err error
+        - interrupt uint32
+        - reason error
+        - activePrecompiles []common.Address
+        - traceSteps bool
+        - traceCallFrames bool
+
+        - call(noret bool, method string, args ...string) (json.RawMessage, error)
+        - addToObj(obj int, key string, val <font color=blue>interface</font>{}) 
+
+        + Stop(err error) 
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) 
+        + CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) 
+        + CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+        + GetResult() (json.RawMessage, error)
+
+    }
+    class memoryWrapper << (S,Aquamarine) >> {
+        - memory *vm.Memory
+
+        - slice(begin int64, end int64) []byte
+        - getUint(addr int64) *big.Int
+        - pushObject(vm *duktape.Context) 
+
+    }
+    class opWrapper << (S,Aquamarine) >> {
+        - op vm.OpCode
+
+        - pushObject(vm *duktape.Context) 
+
+    }
+    class stackWrapper << (S,Aquamarine) >> {
+        - stack *vm.Stack
+
+        - peek(idx int) *big.Int
+        - pushObject(vm *duktape.Context) 
+
+    }
+}
+
+"tracers.Tracer" <|-- "js.jsTracer"
+
+namespace logger {
+    class AccessListTracer << (S,Aquamarine) >> {
+        - excl <font color=blue>map</font>[common.Address]<font color=blue>struct</font>{}
+        - list accessList
+
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) 
+        + CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) 
+        + CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+        + AccessList() types.AccessList
+        + Equal(other *AccessListTracer) bool
+
+    }
+    class Config << (S,Aquamarine) >> {
+        + EnableMemory bool
+        + DisableStack bool
+        + DisableStorage bool
+        + EnableReturnData bool
+        + Debug bool
+        + Limit int
+        + Overrides *params.ChainConfig
+
+    }
+    class JSONLogger << (S,Aquamarine) >> {
+        - encoder *json.Encoder
+        - cfg *Config
+        - env *vm.EVM
+
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) 
+        + CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+
+    }
+    class Storage << (S,Aquamarine) >> {
+        + Copy() Storage
+
+    }
+    class StructLog << (S,Aquamarine) >> {
+        + Pc uint64
+        + Op vm.OpCode
+        + Gas uint64
+        + GasCost uint64
+        + Memory []byte
+        + MemorySize int
+        + Stack []uint256.Int
+        + ReturnData []byte
+        + Storage <font color=blue>map</font>[common.Hash]common.Hash
+        + Depth int
+        + RefundCounter uint64
+        + Err error
+
+        + MarshalJSON() ([]byte, error)
+        + UnmarshalJSON(input []byte) error
+        + OpName() string
+        + ErrorString() string
+
+    }
+    class StructLogger << (S,Aquamarine) >> {
+        - cfg Config
+        - env *vm.EVM
+        - storage <font color=blue>map</font>[common.Address]Storage
+        - logs []StructLog
+        - output []byte
+        - err error
+
+        + Reset() 
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) 
+        + CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) 
+        + CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+        + StructLogs() []StructLog
+        + Error() error
+        + Output() []byte
+
+    }
+    class accessList << (S,Aquamarine) >> {
+        - addAddress(address common.Address) 
+        - addSlot(address common.Address, slot common.Hash) 
+        - equal(other accessList) bool
+        - accessList() types.AccessList
+
+    }
+    class logger.Storage << (T, #FF7700) >>  {
+    }
+    class logger.accessList << (T, #FF7700) >>  {
+    }
+    class logger.accessListSlots << (T, #FF7700) >>  {
+    }
+    class mdLogger << (S,Aquamarine) >> {
+        - out io.Writer
+        - cfg *Config
+        - env *vm.EVM
+
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) 
+        + CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, err error) 
+        + CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+
+    }
+    class structLogMarshaling << (S,Aquamarine) >> {
+        + Gas math.HexOrDecimal64
+        + GasCost math.HexOrDecimal64
+        + Memory hexutil.Bytes
+        + ReturnData hexutil.Bytes
+        + OpName string
+        + ErrorString string
+
+    }
+    class "<font color=blue>map</font>[common.Address]accessListSlots" as fontcolorbluemapfontcommonAddressaccessListSlots {
+        'This class was created so that we can correctly have an alias pointing to this name. Since it contains dots that can break namespaces
+    }
+    class "<font color=blue>map</font>[common.Hash]common.Hash" as fontcolorbluemapfontcommonHashcommonHash {
+        'This class was created so that we can correctly have an alias pointing to this name. Since it contains dots that can break namespaces
+    }
+    class "<font color=blue>map</font>[common.Hash]<font color=blue>struct</font>{}" as fontcolorbluemapfontcommonHashfontcolorbluestructfont {
+        'This class was created so that we can correctly have an alias pointing to this name. Since it contains dots that can break namespaces
+    }
+}
+
+
+namespace native {
+    class account << (S,Aquamarine) >> {
+        + Balance string
+        + Nonce uint64
+        + Code string
+        + Storage <font color=blue>map</font>[common.Hash]common.Hash
+
+    }
+    class callFrame << (S,Aquamarine) >> {
+        + Type string
+        + From string
+        + To string
+        + Value string
+        + Gas string
+        + GasUsed string
+        + Input string
+        + Output string
+        + Error string
+        + Calls []callFrame
+
+    }
+    class callTracer << (S,Aquamarine) >> {
+        - env *vm.EVM
+        - callstack []callFrame
+        - interrupt uint32
+        - reason error
+
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, _ *vm.ScopeContext, depth int, err error) 
+        + CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+        + GetResult() (json.RawMessage, error)
+        + Stop(err error) 
+
+    }
+    class fourByteTracer << (S,Aquamarine) >> {
+        - env *vm.EVM
+        - ids <font color=blue>map</font>[string]int
+        - interrupt uint32
+        - reason error
+        - activePrecompiles []common.Address
+
+        - isPrecompiled(addr common.Address) bool
+        - store(id []byte, size int) 
+
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureEnter(op vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, depth int, err error) 
+        + CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) 
+        + GetResult() (json.RawMessage, error)
+        + Stop(err error) 
+
+    }
+    class native.prestate << (T, #FF7700) >>  {
+    }
+    class noopTracer << (S,Aquamarine) >> {
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, _ *vm.ScopeContext, depth int, err error) 
+        + CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+        + GetResult() (json.RawMessage, error)
+        + Stop(err error) 
+
+    }
+    class prestateTracer << (S,Aquamarine) >> {
+        - env *vm.EVM
+        - prestate prestate
+        - create bool
+        - to common.Address
+        - interrupt uint32
+        - reason error
+
+        - lookupAccount(addr common.Address) 
+        - lookupStorage(addr common.Address, key common.Hash) 
+
+        + CaptureStart(env *vm.EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) 
+        + CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, err error) 
+        + CaptureState(pc uint64, op vm.OpCode, gas uint64, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) 
+        + CaptureFault(pc uint64, op vm.OpCode, gas uint64, cost uint64, _ *vm.ScopeContext, depth int, err error) 
+        + CaptureEnter(typ vm.OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) 
+        + CaptureExit(output []byte, gasUsed uint64, err error) 
+        + GetResult() (json.RawMessage, error)
+        + Stop(err error) 
+
+    }
+    class "<font color=blue>map</font>[common.Address]*account" as fontcolorbluemapfontcommonAddressaccount {
+        'This class was created so that we can correctly have an alias pointing to this name. Since it contains dots that can break namespaces
+    }
+}
+
+"tracers.Tracer" <|-- "native.callTracer"
+"tracers.Tracer" <|-- "native.fourByteTracer"
+"tracers.Tracer" <|-- "native.noopTracer"
+"tracers.Tracer" <|-- "native.prestateTracer"
+
+namespace tracers {
+    class API << (S,Aquamarine) >> {
+        - backend Backend
+
+        - chainContext(ctx context.Context) core.ChainContext
+        - blockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+        - blockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
+        - blockByNumberAndHash(ctx context.Context, number rpc.BlockNumber, hash common.Hash) (*types.Block, error)
+        - traceChain(ctx context.Context, start *types.Block, end *types.Block, config *TraceConfig) (*rpc.Subscription, error)
+        - traceBlock(ctx context.Context, block *types.Block, config *TraceConfig) ([]*txTraceResult, error)
+        - standardTraceBlockToFile(ctx context.Context, block *types.Block, config *StdTraceConfig) ([]string, error)
+        - traceTx(ctx context.Context, message core.Message, txctx *Context, vmctx vm.BlockContext, statedb *state.StateDB, config *TraceConfig) (<font color=blue>interface</font>{}, error)
+
+        + TraceChain(ctx context.Context, start rpc.BlockNumber, end rpc.BlockNumber, config *TraceConfig) (*rpc.Subscription, error)
+        + TraceBlockByNumber(ctx context.Context, number rpc.BlockNumber, config *TraceConfig) ([]*txTraceResult, error)
+        + TraceBlockByHash(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error)
+        + TraceBlock(ctx context.Context, blob []byte, config *TraceConfig) ([]*txTraceResult, error)
+        + TraceBlockFromFile(ctx context.Context, file string, config *TraceConfig) ([]*txTraceResult, error)
+        + TraceBadBlock(ctx context.Context, hash common.Hash, config *TraceConfig) ([]*txTraceResult, error)
+        + StandardTraceBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error)
+        + IntermediateRoots(ctx context.Context, hash common.Hash, config *TraceConfig) ([]common.Hash, error)
+        + StandardTraceBadBlockToFile(ctx context.Context, hash common.Hash, config *StdTraceConfig) ([]string, error)
+        + TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (<font color=blue>interface</font>{}, error)
+        + TraceCall(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, config *TraceCallConfig) (<font color=blue>interface</font>{}, error)
+
+    }
+    interface Backend  {
+        + HeaderByHash(ctx context.Context, hash common.Hash) (*types.Header, error)
+        + HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error)
+        + BlockByHash(ctx context.Context, hash common.Hash) (*types.Block, error)
+        + BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error)
+        + GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+        + RPCGasCap() uint64
+        + ChainConfig() *params.ChainConfig
+        + Engine() consensus.Engine
+        + ChainDb() ethdb.Database
+        + StateAtBlock(ctx context.Context, block *types.Block, reexec uint64, base *state.StateDB, checkLive bool, preferDisk bool) (*state.StateDB, error)
+        + StateAtTransaction(ctx context.Context, block *types.Block, txIndex int, reexec uint64) (core.Message, vm.BlockContext, *state.StateDB, error)
+
+    }
+    class Context << (S,Aquamarine) >> {
+        + BlockHash common.Hash
+        + TxIndex int
+        + TxHash common.Hash
+
+    }
+    class StdTraceConfig << (S,Aquamarine) >> {
+        + Reexec *uint64
+        + TxHash common.Hash
+
+    }
+    class TraceCallConfig << (S,Aquamarine) >> {
+        + Tracer *string
+        + Timeout *string
+        + Reexec *uint64
+        + StateOverrides *ethapi.StateOverride
+
+    }
+    class TraceConfig << (S,Aquamarine) >> {
+        + Tracer *string
+        + Timeout *string
+        + Reexec *uint64
+
+    }
+    interface Tracer  {
+        + GetResult() (json.RawMessage, error)
+        + Stop(err error) 
+
+    }
+    class asset << (S,Aquamarine) >> {
+        - bytes []byte
+        - info os.FileInfo
+        - digest []byte
+
+    }
+    class bindataFileInfo << (S,Aquamarine) >> {
+        - name string
+        - size int64
+        - mode os.FileMode
+        - modTime time.Time
+
+        + Name() string
+        + Size() int64
+        + Mode() os.FileMode
+        + ModTime() time.Time
+        + IsDir() bool
+        + Sys() <font color=blue>interface</font>{}
+
+    }
+    class bintree << (S,Aquamarine) >> {
+        + Func <font color=blue>func</font>() (*asset, error)
+        + Children <font color=blue>map</font>[string]*bintree
+
+    }
+    class blockTraceResult << (S,Aquamarine) >> {
+        + Block hexutil.Uint64
+        + Hash common.Hash
+        + Traces []*txTraceResult
+
+    }
+    class blockTraceTask << (S,Aquamarine) >> {
+        - statedb *state.StateDB
+        - block *types.Block
+        - rootref common.Hash
+        - results []*txTraceResult
+
+    }
+    class chainContext << (S,Aquamarine) >> {
+        - api *API
+        - ctx context.Context
+
+        + Engine() consensus.Engine
+        + GetHeader(hash common.Hash, number uint64) *types.Header
+
+    }
+    class tracers.lookupFunc << (T, #FF7700) >>  {
+    }
+    class txTraceResult << (S,Aquamarine) >> {
+        + Result <font color=blue>interface</font>{}
+        + Error string
+
+    }
+    class txTraceTask << (S,Aquamarine) >> {
+        - statedb *state.StateDB
+        - index int
+
+    }
+}
+"logger.Config" *-- "tracers.StdTraceConfig"
+"logger.Config" *-- "tracers.TraceCallConfig"
+"logger.Config" *-- "tracers.TraceConfig"
+
+
+"logger.fontcolorbluemapfontcommonAddressaccessListSlots" #.. "logger.accessList"
+"logger.fontcolorbluemapfontcommonHashfontcolorbluestructfont" #.. "logger.accessListSlots"
+"logger.fontcolorbluemapfontcommonHashcommonHash" #.. "logger.Storage"
+"native.fontcolorbluemapfontcommonAddressaccount" #.. "native.prestate"
+"tracers.<font color=blue>func</font>(string, *Context) (Tracer, error)" #.. "tracers.lookupFunc"
+@enduml
